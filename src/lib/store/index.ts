@@ -29,6 +29,7 @@ export interface DataStore {
   listFunnels(): Promise<Funnel[]>;
   getFunnelBySlug(slug: string): Promise<Funnel | null>;
   getFunnelById(id: string): Promise<Funnel | null>;
+  createFunnel(f: Omit<Funnel, "id">): Promise<Funnel>;
   updateFunnel(id: string, patch: Partial<Funnel>): Promise<Funnel | null>;
 
   getIntakeSession(token: string): Promise<IntakeSession | null>;

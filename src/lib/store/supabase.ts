@@ -172,6 +172,31 @@ export class SupabaseStore implements DataStore {
     return data ? funnelFromRow(data) : null;
   }
 
+  async createFunnel(f: Omit<Funnel, "id">): Promise<Funnel> {
+    const { data, error } = await this.db
+      .from("funnels")
+      .insert({
+        workspace_id: f.workspaceId,
+        name: f.name,
+        slug: f.slug,
+        segment: f.segment,
+        offer: f.offer,
+        status: f.status,
+        kicker: f.kicker,
+        problem_copy: f.problemCopy,
+        stakes: f.stakes,
+        storybrand: f.storybrand,
+        variants: f.variants,
+        blocks: f.blocks,
+        weights: f.weights,
+        stats: f.stats,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return funnelFromRow(data);
+  }
+
   async updateFunnel(id: string, patch: Partial<Funnel>): Promise<Funnel | null> {
     const row: Row = {};
     if (patch.name !== undefined) row.name = patch.name;

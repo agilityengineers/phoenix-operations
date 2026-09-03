@@ -98,6 +98,12 @@ export class MemoryStore implements DataStore {
     return clone(this.funnels.find((f) => f.id === id) ?? null);
   }
 
+  async createFunnel(f: Omit<Funnel, "id">): Promise<Funnel> {
+    const funnel: Funnel = { ...clone(f), id: this.nextId("fn") } as Funnel;
+    this.funnels.push(funnel);
+    return clone(funnel);
+  }
+
   async updateFunnel(id: string, patch: Partial<Funnel>): Promise<Funnel | null> {
     const f = this.funnels.find((x) => x.id === id);
     if (!f) return null;
