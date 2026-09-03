@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Phoenix Operations"
+description = "A branded coaching and operations platform with a public marketing funnel, guided intake, results proof, authentication, and an admin workspace for managing contacts, funnels, content, sequences, integrations, billing, and team settings."
+version = "1.0.0"
+id = "artifacts/phoenix-operations"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22688
+
+[services.development]
+run = "pnpm --filter @workspace/phoenix-operations run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/phoenix-operations", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/phoenix-operations/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22688"
+BASE_PATH = "/"

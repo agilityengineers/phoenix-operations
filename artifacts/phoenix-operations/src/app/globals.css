@@ -1,0 +1,330 @@
+/* ── Phoenix Operations design tokens ─────────────────────────────────────── */
+:root {
+  --paper: #f7f4ee;
+  --admin-bg: #f3f1eb;
+  --card: #ffffff;
+  --card-alt: #fdfbf7;
+  --card-warm: #fdf9f2;
+  --card-amber: #fbf4e9;
+
+  --ink: #14263b;
+  --body: #3a4a5e;
+  --muted: #4a5a6e;
+  --muted-2: #6a7686;
+  --muted-3: #8a94a2;
+  --faint: #b4ac98;
+  --faint-blue: #7e8da1;
+  --faint-blue-2: #9faec2;
+
+  --orange: #d96c2c;
+  --orange-hover: #c05a1c;
+  --orange-bright: #e8894e;
+  --orange-tint: #fbefe4;
+  --orange-deep: #b5541c;
+
+  --border: #e5dfd2;
+  --border-2: #ede7da;
+  --border-3: #e7e2d6;
+  --border-4: #f1ede2;
+  --border-5: #e0dacb;
+  --border-6: #d8d2c4;
+
+  --success: #2e7d43;
+  --success-bg: #e8f3ea;
+  --warning: #b5541c;
+  --warning-bg: #fbf4e9;
+  --danger: #b04a3a;
+  --danger-bg: #f6e8e6;
+}
+
+/* --font-poppins is defined on <html> by next/font (includes size-adjusted
+   fallbacks); this body rule adds a safety stack if the variable is absent. */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-poppins, "Poppins"), -apple-system, "Segoe UI", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--orange);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--orange-deep);
+}
+
+img {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--orange);
+  outline-offset: 1px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-6);
+  border-radius: 5px;
+}
+
+/* ── Shared primitives ─────────────────────────────────────────────────────── */
+
+/* Primary CTA — orange bg, white text, uppercase */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  padding: 18px 30px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover {
+  background: var(--orange-hover);
+  color: #fff;
+}
+.btn-primary.on-dark:hover {
+  background: var(--orange-bright);
+}
+.btn-primary .arrow {
+  font-size: 18px;
+}
+
+/* Secondary — orange outline */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--orange);
+  background: transparent;
+  color: var(--orange);
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-outline:hover {
+  background: var(--orange);
+  color: #fff;
+}
+
+/* Ink outline */
+.btn-ink-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  padding: 14px 26px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-ink-outline:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* Section kicker — small uppercase orange label */
+.kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+
+/* Orange accent rule under headings */
+.accent-rule {
+  width: 76px;
+  height: 5px;
+  background: var(--orange);
+  margin: 28px 0;
+}
+.accent-rule.sm {
+  width: 56px;
+  height: 4px;
+}
+.accent-rule.md {
+  width: 64px;
+  height: 4px;
+}
+.accent-rule.centered {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Selectable chip (intake options, filters) */
+.chip {
+  border: 1.5px solid var(--border-6);
+  background: var(--card-alt);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.chip:hover {
+  border-color: var(--orange);
+}
+.chip.selected {
+  border-color: var(--orange);
+  background: var(--orange-tint);
+  color: var(--orange-deep);
+}
+
+/* Status pill */
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 20px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.pill.ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.pill.warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.pill.bad {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.pill.neutral {
+  background: var(--border-4);
+  color: var(--muted-2);
+}
+.pill.ink {
+  background: var(--ink);
+  color: #fff;
+}
+.pill.info {
+  background: #eaf0f6;
+  color: var(--ink);
+}
+
+/* Score pill: green ≥75, amber ≥55, red below */
+.score-pill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 20px;
+  padding: 4px 10px;
+  text-align: center;
+}
+.score-pill.green {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.score-pill.amber {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.score-pill.red {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* Standard white card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border-3);
+  border-radius: 12px;
+}
+
+/* Form field */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.field input,
+.field textarea,
+.field select {
+  border: 1px solid var(--border-5);
+  border-radius: 8px;
+  padding: 13px 15px;
+  font-size: 14px;
+  font-weight: 400;
+  background: var(--card-alt);
+}
+.field textarea {
+  resize: vertical;
+}
+
+/* Visually hidden (a11y) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Honeypot field — hidden from humans, visible to bots */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}

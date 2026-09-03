@@ -38,7 +38,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- On API startup, the default `ws_phoenix` workspace is created idempotently. If it has no owner/admin, the server invalidates older bootstrap tokens, creates a one-time 60-minute token, and writes its `/bootstrap?token=...` URL once to private deployment logs. The public bootstrap status endpoint exposes only whether provisioning is required; it never exposes the token.
 
 ## Pointers
 
