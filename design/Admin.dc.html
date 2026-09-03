@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #F3F1EB; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; }
+  a:hover { color: #B5541C; }
+  input, select, textarea { font-family: 'Poppins', sans-serif; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid #D96C2C; outline-offset: 1px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #D8D2C4; border-radius: 5px; }
+</style>
+</helmet>
+<div style="display: flex; min-height: 100vh; min-width: 1280px">
+<aside data-screen-label="Admin Sidebar" style="width: 232px; flex: none; background: #14263B; color: #fff; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; box-sizing: border-box">
+  <div style="padding: 22px 20px 18px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px">
+    <img src="assets/mark.png" alt="" style="height: 30px; width: auto">
+    <div style="line-height: 1.15"><div style="font-size: 15px; font-weight: 800; letter-spacing: 0.1em">PHOENIX</div><div style="font-size: 10px; font-weight: 400; letter-spacing: 0.3em; color: #9FAEC2">OPERATIONS</div></div>
+  </div>
+  <nav style="display: flex; flex-direction: column; gap: 4px; padding: 16px 12px; flex: 1">
+    <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
+      <button onClick="{{ nav }}" data-view="{{ n.id }}" style="{{ n.css }}">{{ n.label }}</button>
+    </sc-for>
+  </nav>
+  <div style="padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px">
+    <img src="assets/headshot.jpg" alt="" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; object-position: top">
+    <div style="line-height: 1.3"><div style="font-size: 13px; font-weight: 600">Joshua K.</div><div style="font-size: 11px; color: #9FAEC2">Owner</div></div>
+  </div>
+  <a href="Phoenix Site.dc.html" style="display: block; padding: 12px 20px; font-size: 12px; color: #9FAEC2; border-top: 1px solid rgba(255,255,255,0.1)" style-hover="color: #fff">← View site</a>
+</aside>
+
+<main style="flex: 1; padding: 32px 36px; box-sizing: border-box; min-width: 0">
+
+<sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+  <section data-screen-label="Dashboard">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">Dashboard</h1>
+      <span style="font-size: 13px; color: #8A94A2">Last 30 days</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 24px">
+      <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 20px 22px">
+          <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2">{{ k.label }}</div>
+          <div style="font-size: 30px; font-weight: 800; margin-top: 6px">{{ k.value }}</div>
+          <div style="font-size: 12px; margin-top: 4px; color: {{ k.deltaColor }}">{{ k.delta }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-top: 16px">
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 15px; font-weight: 700">Funnel conversion — Lack of Control</div>
+        <div style="display: flex; align-items: flex-end; gap: 4px; margin-top: 22px; height: 150px">
+          <sc-for list="{{ funnelBars }}" as="b" hint-placeholder-count="4">
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 8px; height: 100%">
+              <span style="font-size: 15px; font-weight: 800">{{ b.n }}</span>
+              <div style="width: 100%; border-radius: 6px 6px 0 0; background: {{ b.color }}; height: {{ b.h }}"></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 4px; margin-top: 8px">
+          <sc-for list="{{ funnelBars }}" as="b">
+            <div style="flex: 1; text-align: center; font-size: 12px; color: #6A7686">{{ b.label }}<br><strong style="color: #14263B">{{ b.rate }}</strong></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 15px; font-weight: 700">Top sources</div>
+        <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 18px">
+          <sc-for list="{{ sources }}" as="s" hint-placeholder-count="4">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">{{ s.name }}</span><span style="color: #6A7686">{{ s.n }} leads</span></div>
+              <div style="height: 8px; background: #F1EDE2; border-radius: 4px; margin-top: 6px"><div style="height: 100%; background: #D96C2C; border-radius: 4px; width: {{ s.pct }}"></div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px; margin-top: 16px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div style="font-size: 15px; font-weight: 700">Newest qualified leads</div>
+        <button onClick="{{ goContacts }}" style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">View all →</button>
+      </div>
+      <div style="margin-top: 12px">
+        <sc-for list="{{ hotLeads }}" as="c" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 2fr 1.6fr 1.2fr 90px 110px; gap: 16px; align-items: center; padding: 13px 4px; border-top: 1px solid #F1EDE2; cursor: pointer" onClick="{{ openContactRow }}" data-id="{{ c.id }}">
+            <div><div style="font-size: 14px; font-weight: 700">{{ c.name }}</div><div style="font-size: 12px; color: #8A94A2">{{ c.company }}</div></div>
+            <div style="font-size: 13px; color: #4A5A6E">{{ c.funnel }}</div>
+            <div style="font-size: 13px; color: #4A5A6E">{{ c.source }}</div>
+            <div style="{{ c.scoreCss }}">{{ c.score }}</div>
+            <div style="font-size: 12px; font-weight: 700; color: #4A5A6E; background: #F1EDE2; border-radius: 20px; padding: 5px 12px; text-align: center">{{ c.stage }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isFunnels }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Funnels">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">Funnels</h1>
+      <button onClick="{{ newFunnel }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 12px 20px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">+ New funnel</button>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px">
+      <sc-for list="{{ funnels }}" as="f" hint-placeholder-count="5">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start">
+            <div style="font-size: 16px; font-weight: 700">{{ f.name }}</div>
+            <span style="{{ f.statusCss }}">{{ f.status }}</span>
+          </div>
+          <div style="font-size: 13px; color: #6A7686; line-height: 1.5">{{ f.headline }}</div>
+          <div style="font-size: 12px; color: #8A94A2">/{{ f.slug }} · {{ f.variants }}</div>
+          <div style="display: flex; gap: 18px; font-size: 13px; border-top: 1px solid #F1EDE2; padding-top: 12px">
+            <span><strong>{{ f.visits }}</strong> visits</span>
+            <span><strong>{{ f.leads }}</strong> leads</span>
+            <span><strong>{{ f.cvr }}</strong> CVR</span>
+          </div>
+          <div style="display: flex; gap: 10px">
+            <button onClick="{{ editFunnel }}" data-id="{{ f.id }}" style="flex: 1; border: 1.5px solid #D96C2C; background: none; color: #D96C2C; border-radius: 6px; padding: 9px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #FBEFE4">Edit funnel</button>
+            <a href="{{ f.pageHref }}" style="flex: 1; text-align: center; border: 1.5px solid #E7E2D6; color: #4A5A6E; border-radius: 6px; padding: 9px; font-size: 13px; font-weight: 700" style-hover="border-color: #14263B; color: #14263B">View page</a>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isBuilder }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Funnel Builder">
+    <button onClick="{{ backToFunnels }}" style="border: none; background: none; color: #8A94A2; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0">← All funnels</button>
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">{{ builderName }}</h1>
+      <div style="display: flex; gap: 10px">
+        <span style="font-size: 12px; font-weight: 700; color: #2E7D43; background: #E8F3EA; border-radius: 20px; padding: 7px 14px">● Live</span>
+        <button style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">Save changes</button>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Audience & offer</div>
+          <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 16px">
+            <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Segment
+              <input defaultValue="Lack of Control — founders whose business runs them" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+            </label>
+            <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">URL slug
+              <input defaultValue="lack-of-control" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+            </label>
+            <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Offer
+              <input defaultValue="Free 15-minute conversation — no pitch" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+            </label>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">StoryBrand narrative</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px">
+            <sc-for list="{{ storyBlocks }}" as="s" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: start">
+                <span style="font-size: 12px; font-weight: 700; color: #D96C2C; padding-top: 11px">{{ s.role }}</span>
+                <input defaultValue="{{ s.copy }}" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 10px 14px; font-size: 13px; background: #FDFBF7">
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin: 14px 0 0; font-size: 12px; color: #8A94A2; line-height: 1.5">The prospect is the hero; Phoenix Operations is the guide. Every funnel page renders from this same narrative template.</p>
+        </div>
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">A/B variants</div>
+            <button style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">+ Add variant</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px">
+            <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #E7E2D6; border-radius: 8px; padding: 12px 16px">
+              <div><span style="font-size: 13px; font-weight: 700">A — "The business shouldn't run you."</span><span style="font-size: 12px; color: #8A94A2"> · 50% traffic</span></div>
+              <span style="font-size: 12px; color: #2E7D43; font-weight: 700">7.1% CVR</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #E7E2D6; border-radius: 8px; padding: 12px 16px">
+              <div><span style="font-size: 13px; font-weight: 700">B — "Take your business back."</span><span style="font-size: 12px; color: #8A94A2"> · 50% traffic</span></div>
+              <span style="font-size: 12px; color: #8A94A2; font-weight: 700">5.4% CVR</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Intake form — modular blocks</div>
+          <button style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">+ Add block</button>
+        </div>
+        <p style="margin: 10px 0 0; font-size: 12px; color: #8A94A2; line-height: 1.5">Drag to reorder. Each block is reusable across funnels; question banks come from the Conversation Guide.</p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px">
+          <sc-for list="{{ formBlocks }}" as="b" hint-placeholder-count="5">
+            <div style="border: 1px solid #E7E2D6; border-radius: 10px; padding: 14px 16px; background: #FDFBF7">
+              <div style="display: flex; align-items: center; gap: 12px">
+                <span style="color: #C4BCA8; cursor: grab; font-size: 15px">⠿</span>
+                <div style="flex: 1">
+                  <div style="font-size: 14px; font-weight: 700">{{ b.name }}</div>
+                  <div style="font-size: 12px; color: #8A94A2; margin-top: 2px">{{ b.desc }}</div>
+                </div>
+                <span style="{{ b.reqCss }}">{{ b.req }}</span>
+                <button onClick="{{ toggleBlock }}" data-id="{{ b.id }}" style="{{ b.toggleCss }}">{{ b.toggleLabel }}</button>
+              </div>
+              <sc-if value="{{ b.conditional }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 10px; margin-left: 27px; font-size: 12px; color: #6A7686; background: #FBF4E9; border: 1px dashed #EDDCC0; border-radius: 6px; padding: 8px 12px">⤷ Condition: {{ b.condition }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top: 20px; border-top: 1px solid #F1EDE2; padding-top: 18px">
+          <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Scoring weights</div>
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 14px">
+            <sc-for list="{{ weights }}" as="w" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 150px 1fr 44px; gap: 14px; align-items: center">
+                <span style="font-size: 13px; font-weight: 600">{{ w.name }}</span>
+                <div style="height: 8px; background: #F1EDE2; border-radius: 4px"><div style="height: 100%; background: #14263B; border-radius: 4px; width: {{ w.pct }}"></div></div>
+                <span style="font-size: 13px; font-weight: 700; text-align: right">{{ w.pts }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin: 14px 0 0; font-size: 12px; color: #8A94A2">Coachability carries the heaviest weight — both direct self-assessment and inferred signals.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isContacts }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Contacts">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; gap: 18px">
+        <h1 style="margin: 0; font-size: 26px; font-weight: 800">Pipeline</h1>
+        <div style="display: flex; gap: 4px; background: #fff; border: 1px solid #E7E2D6; border-radius: 8px; padding: 4px">
+          <sc-for list="{{ pipelineTabs }}" as="t">
+            <button onClick="{{ pickPipeline }}" data-id="{{ t.id }}" style="{{ t.css }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <button onClick="{{ addCard }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 10px 18px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">+ Add card</button>
+        <button style="border: 1.5px solid #E7E2D6; background: #fff; color: #4A5A6E; border-radius: 6px; padding: 10px 16px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">Import CSV</button>
+        <button style="border: 1.5px solid #E7E2D6; background: #fff; color: #4A5A6E; border-radius: 6px; padding: 10px 16px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">Export CSV</button>
+      </div>
+    </div>
+    <p style="margin: 8px 0 0; font-size: 12.5px; color: #8A94A2">{{ pipelineDesc }} · Drag cards between stages, or use ←/→.</p>
+    <div style="display: flex; gap: 10px; margin-top: 20px; align-items: center">
+      <input onChange="{{ onSearch }}" placeholder="Search name, company, email…" style="flex: 1; max-width: 320px; border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 13px; background: #fff">
+      <sc-for list="{{ stageFilters }}" as="f">
+        <button onClick="{{ setStageFilter }}" data-stage="{{ f.name }}" style="{{ f.css }}">{{ f.name }}</button>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 22px; align-items: start">
+      <sc-for list="{{ pipeline }}" as="col" hint-placeholder-count="4">
+        <div onDragOver="{{ dragOver }}" onDrop="{{ drop }}" data-stage="{{ col.idx }}" style="{{ col.colCss }}">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px 10px">
+            <span style="font-size: 13px; font-weight: 800; letter-spacing: 0.04em">{{ col.name }}</span>
+            <span style="font-size: 12px; font-weight: 700; color: #8A94A2">{{ col.count }}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; min-height: 60px">
+            <sc-for list="{{ col.cards }}" as="c">
+              <div draggable="{{ true }}" onDragStart="{{ dragStart }}" onClick="{{ openContactRow }}" data-id="{{ c.id }}" style="background: #fff; border: 1px solid #E7E2D6; border-radius: 10px; padding: 14px; cursor: grab" style-hover="border-color: #D96C2C">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px">
+                  <div style="font-size: 14px; font-weight: 700">{{ c.name }}</div>
+                  <span style="{{ c.scoreCss }}">{{ c.score }}</span>
+                </div>
+                <div style="font-size: 12px; color: #8A94A2; margin-top: 2px">{{ c.company }}</div>
+                <div style="font-size: 11px; color: #6A7686; margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap">
+                  <span style="background: #F1EDE2; border-radius: 4px; padding: 3px 8px">{{ c.funnel }}</span>
+                  <span style="background: #F1EDE2; border-radius: 4px; padding: 3px 8px">{{ c.source }}</span>
+                </div>
+                <div style="display: flex; gap: 6px; margin-top: 10px; border-top: 1px solid #F1EDE2; padding-top: 10px">
+                  <button onClick="{{ moveBack }}" data-id="{{ c.id }}" style="border: 1px solid #E7E2D6; background: none; border-radius: 5px; padding: 4px 9px; font-family: inherit; font-size: 11px; font-weight: 700; color: #8A94A2; cursor: pointer" style-hover="color: #14263B; border-color: #14263B">←</button>
+                  <button onClick="{{ moveFwd }}" data-id="{{ c.id }}" style="border: 1px solid #E7E2D6; background: none; border-radius: 5px; padding: 4px 9px; font-family: inherit; font-size: 11px; font-weight: 700; color: #8A94A2; cursor: pointer" style-hover="color: #14263B; border-color: #14263B">→</button>
+                  <span style="flex: 1"></span>
+                  <span style="font-size: 11px; color: #B4AC98; align-self: center">{{ c.owner }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <button onClick="{{ addCardTo }}" data-stage="{{ col.idx }}" style="margin-top: 10px; width: 100%; border: 1.5px dashed #D3CCBB; background: none; color: #8A94A2; border-radius: 8px; padding: 9px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="color: #D96C2C; border-color: #D96C2C">+ Add card</button>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isContactDetail }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Contact Detail">
+    <button onClick="{{ goContacts }}" style="border: none; background: none; color: #8A94A2; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0">← All contacts</button>
+    <div style="display: grid; grid-template-columns: 320px 1fr; gap: 16px; margin-top: 14px; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="display: flex; align-items: center; gap: 14px">
+            <span style="width: 52px; height: 52px; border-radius: 50%; background: #14263B; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">{{ dInitials }}</span>
+            <div>
+              <div style="font-size: 17px; font-weight: 800">{{ dName }}</div>
+              <div style="font-size: 13px; color: #8A94A2">{{ dRole }} · {{ dCompany }}</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px; margin-top: 18px; background: #14263B; border-radius: 10px; padding: 14px 18px">
+            <span style="font-size: 28px; font-weight: 800; color: #E8894E">{{ dScore }}</span>
+            <div style="font-size: 12px; color: #B8C4D4; line-height: 1.5">Qualification score<br><span style="color: #fff; font-weight: 700">{{ dTags }}</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 18px; font-size: 13px">
+            <sc-for list="{{ dFields }}" as="f" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 110px 1fr; gap: 10px"><span style="color: #8A94A2; font-weight: 600">{{ f.k }}</span><span style="font-weight: 600">{{ f.v }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 20px 24px">
+          <div style="font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Sync status</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; font-size: 12px">
+            <div style="display: flex; justify-content: space-between"><span style="color: #6A7686">HubSpot contact</span><span style="color: #2E7D43; font-weight: 700">✓ Synced 2m ago</span></div>
+            <div style="display: flex; justify-content: space-between"><span style="color: #6A7686">Zapier — new_lead</span><span style="color: #2E7D43; font-weight: 700">✓ Delivered</span></div>
+            <div style="display: flex; justify-content: space-between"><span style="color: #6A7686">SendGrid confirmation</span><span style="color: #2E7D43; font-weight: 700">✓ Sent</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <div style="font-size: 15px; font-weight: 700">Activity timeline</div>
+          <div style="display: flex; gap: 8px">
+            <button onClick="{{ addNote }}" style="border: 1.5px solid #D96C2C; background: none; color: #D96C2C; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="background: #FBEFE4">+ Note</button>
+            <button onClick="{{ addTask }}" style="border: 1.5px solid #E7E2D6; background: none; color: #4A5A6E; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="border-color: #14263B; color: #14263B">+ Task</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; margin-top: 18px">
+          <sc-for list="{{ dTimeline }}" as="t" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 34px 1fr; gap: 14px; padding-bottom: 22px; position: relative">
+              <div style="display: flex; flex-direction: column; align-items: center">
+                <span style="{{ t.dotCss }}">{{ t.glyph }}</span>
+                <span style="flex: 1; width: 2px; background: #F1EDE2; margin-top: 4px"></span>
+              </div>
+              <div>
+                <div style="display: flex; justify-content: space-between; gap: 12px">
+                  <span style="font-size: 13px; font-weight: 700">{{ t.title }}</span>
+                  <span style="font-size: 12px; color: #B4AC98; white-space: nowrap">{{ t.when }}</span>
+                </div>
+                <div style="font-size: 13px; color: #4A5A6E; line-height: 1.55; margin-top: 3px">{{ t.body }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isSequences }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Sequences">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">Follow-up Sequences</h1>
+      <button style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 12px 20px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">+ New sequence</button>
+    </div>
+    <p style="margin: 10px 0 0; font-size: 13px; color: #8A94A2; max-width: 640px; line-height: 1.6">Automations that run after intake events. Emails send via SendGrid; stage moves and tasks land in the CRM.</p>
+    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 22px">
+      <sc-for list="{{ sequences }}" as="q" hint-placeholder-count="3">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 22px 26px">
+          <div style="display: flex; align-items: center; gap: 14px">
+            <span style="{{ q.stateCss }}">{{ q.state }}</span>
+            <div style="flex: 1">
+              <div style="font-size: 15px; font-weight: 800">{{ q.name }}</div>
+              <div style="font-size: 12px; color: #8A94A2; margin-top: 2px">Trigger: {{ q.trigger }}</div>
+            </div>
+            <span style="font-size: 12px; color: #6A7686"><strong>{{ q.stat }}</strong> {{ q.statLabel }}</span>
+            <button style="border: 1.5px solid #E7E2D6; background: none; color: #4A5A6E; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="border-color: #14263B; color: #14263B">Edit</button>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap">
+            <sc-for list="{{ q.steps }}" as="s">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div style="border: 1px solid #E7E2D6; background: #FDFBF7; border-radius: 8px; padding: 10px 14px">
+                  <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: {{ s.color }}">{{ s.kind }}</div>
+                  <div style="font-size: 12.5px; font-weight: 600; margin-top: 2px">{{ s.label }}</div>
+                </div>
+                <span style="color: #C4BCA8; font-size: 14px">{{ s.arrow }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isBilling }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Billing">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 800">Billing & Plans</h1>
+    <p style="margin: 10px 0 0; font-size: 13px; color: #8A94A2; max-width: 640px; line-height: 1.6">Partner workspaces subscribe via Stripe. Phoenix Operations (network admin) sees every subscription; partners see only their own.</p>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px">
+      <sc-for list="{{ planCards }}" as="p" hint-placeholder-count="3">
+        <div style="{{ p.cardCss }}">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <span style="font-size: 16px; font-weight: 800">{{ p.name }}</span>
+            <sc-if value="{{ p.popular }}" hint-placeholder-val="{{ false }}"><span style="background: #14263B; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 20px; padding: 4px 10px">Most common</span></sc-if>
+          </div>
+          <div style="font-size: 32px; font-weight: 800; margin-top: 10px">{{ p.price }}<span style="font-size: 13px; font-weight: 600; color: #8A94A2">/mo</span></div>
+          <ul style="margin: 14px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px">
+            <sc-for list="{{ p.features }}" as="f"><li style="font-size: 13px; line-height: 1.5; color: #4A5A6E">{{ f }}</li></sc-for>
+          </ul>
+        </div>
+      </sc-for>
+    </div>
+    <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px; margin-top: 16px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div style="font-size: 15px; font-weight: 700">Subscriptions</div>
+        <span style="font-size: 13px; color: #6A7686">MRR <strong style="color: #14263B">$657</strong> · Stripe connected <span style="color: #2E7D43; font-weight: 700">●</span></span>
+      </div>
+      <div style="margin-top: 10px">
+        <sc-for list="{{ subs }}" as="s" hint-placeholder-count="3">
+          <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr auto; gap: 16px; align-items: center; padding: 13px 4px; border-top: 1px solid #F1EDE2; font-size: 13px">
+            <div><div style="font-weight: 700">{{ s.name }}</div><div style="font-size: 12px; color: #8A94A2">{{ s.domain }}</div></div>
+            <span style="font-weight: 600">{{ s.plan }}</span>
+            <span style="color: #6A7686">{{ s.since }}</span>
+            <span style="font-weight: 700">{{ s.amount }}</span>
+            <span style="{{ s.stateCss }}">{{ s.state }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isContent }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Site Content CMS">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">Site Content</h1>
+      <button style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 12px 20px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">Publish changes</button>
+    </div>
+    <p style="margin: 10px 0 0; font-size: 13px; color: #8A94A2; max-width: 640px; line-height: 1.6">Every public page is built from modular sections. Toggle sections on or off, edit copy inline, and reorder — changes go live on publish.</p>
+    <div style="display: grid; grid-template-columns: 240px 1fr; gap: 16px; margin-top: 22px; align-items: start">
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+        <sc-for list="{{ cmsPages }}" as="p" hint-placeholder-count="4">
+          <button onClick="{{ pickPage }}" data-id="{{ p.id }}" style="{{ p.css }}">{{ p.name }}<span style="display: block; font-size: 11px; font-weight: 400; color: #8A94A2; margin-top: 2px">{{ p.meta }}</span></button>
+        </sc-for>
+        <button style="margin-top: 8px; border: 1.5px dashed #D8D2C4; background: none; color: #8A94A2; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="color: #D96C2C; border-color: #D96C2C">+ New page</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <sc-for list="{{ cmsSections }}" as="s" hint-placeholder-count="5">
+          <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 18px 22px">
+            <div style="display: flex; align-items: center; gap: 14px">
+              <span style="color: #C4BCA8; cursor: grab; font-size: 15px">⠿</span>
+              <div style="flex: 1">
+                <div style="font-size: 14px; font-weight: 700">{{ s.name }}</div>
+                <div style="font-size: 12px; color: #8A94A2; margin-top: 2px">{{ s.desc }}</div>
+              </div>
+              <button style="border: 1.5px solid #E7E2D6; background: none; color: #4A5A6E; border-radius: 6px; padding: 7px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="border-color: #14263B; color: #14263B">Edit copy</button>
+              <button onClick="{{ toggleSection }}" data-id="{{ s.id }}" style="{{ s.toggleCss }}">{{ s.toggleLabel }}</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isBranding }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="White Label">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 800">Branding & White Label</h1>
+    <p style="margin: 10px 0 0; font-size: 13px; color: #8A94A2; max-width: 640px; line-height: 1.6">Each partner workspace gets its own brand: logo, colors, domain, and guide identity. The Phoenix Operations funnel system and CRM stay the same underneath.</p>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; align-items: start">
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Brand identity</div>
+        <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 14px">
+          <div style="border: 1.5px dashed #D8D2C4; border-radius: 10px; padding: 18px; display: flex; align-items: center; gap: 16px">
+            <img src="assets/logo.png" alt="" style="height: 44px; mix-blend-mode: multiply">
+            <div style="flex: 1; font-size: 12px; color: #8A94A2">Logo — PNG/SVG, transparent background<br>Used on all public pages and emails</div>
+            <button style="border: 1.5px solid #D96C2C; background: none; color: #D96C2C; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="background: #FBEFE4">Replace</button>
+          </div>
+          <div style="display: flex; gap: 12px">
+            <div style="flex: 1; border: 1px solid #E7E2D6; border-radius: 10px; padding: 14px">
+              <div style="width: 100%; height: 34px; border-radius: 6px; background: #D96C2C"></div>
+              <div style="font-size: 12px; font-weight: 700; margin-top: 8px">Primary · #D76C2C</div>
+            </div>
+            <div style="flex: 1; border: 1px solid #E7E2D6; border-radius: 10px; padding: 14px">
+              <div style="width: 100%; height: 34px; border-radius: 6px; background: #14263B"></div>
+              <div style="font-size: 12px; font-weight: 700; margin-top: 8px">Ink · #14263B</div>
+            </div>
+            <div style="flex: 1; border: 1px solid #E7E2D6; border-radius: 10px; padding: 14px">
+              <div style="width: 100%; height: 34px; border-radius: 6px; background: #F7F4EE; border: 1px solid #E7E2D6; box-sizing: border-box"></div>
+              <div style="font-size: 12px; font-weight: 700; margin-top: 8px">Paper · #F7F4EE</div>
+            </div>
+          </div>
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Custom domain
+            <input defaultValue="phoenixoperations.com" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+          </label>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Guide identity</div>
+        <p style="margin: 10px 0 0; font-size: 12px; color: #8A94A2; line-height: 1.6">The "Your Guide" page, guide band, and testimonial attributions all render from this profile — so each implementer's workspace shows their own guide.</p>
+        <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 16px">
+            <img src="assets/headshot.jpg" alt="" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; object-position: top">
+            <button style="border: 1.5px solid #D96C2C; background: none; color: #D96C2C; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer" style-hover="background: #FBEFE4">Replace photo</button>
+          </div>
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Guide name
+            <input defaultValue="Joshua Kornitsky" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+          </label>
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Title
+            <input defaultValue="Founder, Phoenix Operations" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+          </label>
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Guide story (hero copy)
+            <textarea rows="3" defaultValue="I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses." style="border: 1px solid #E0DACB; border-radius: 8px; padding: 11px 14px; font-size: 13px; font-weight: 400; background: #FDFBF7; resize: vertical"></textarea>
+          </label>
+          <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #F1EDE2; border-radius: 8px; padding: 10px 14px">
+            <span style="font-size: 13px; font-weight: 600">Show guide band on homepage</span>
+            <span style="font-size: 12px; font-weight: 800; color: #2E7D43; background: #E8F3EA; border-radius: 20px; padding: 5px 12px">On</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isNetwork }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Users & Network">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800">Users & Partner Network</h1>
+      <button onClick="{{ invite }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 12px 20px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #C05A1C">+ Invite user</button>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 22px">
+      <sc-for list="{{ networkKpis }}" as="k" hint-placeholder-count="4">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 18px 20px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2">{{ k.label }}</div>
+          <div style="font-size: 26px; font-weight: 800; margin-top: 4px">{{ k.value }}</div>
+          <div style="font-size: 11.5px; margin-top: 2px; color: {{ k.deltaColor }}">{{ k.delta }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; align-items: start">
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Role hierarchy</div>
+        <div style="display: flex; flex-direction: column; gap: 0; margin-top: 16px">
+          <sc-for list="{{ roles }}" as="r" hint-placeholder-count="4">
+            <div style="display: flex; gap: 16px; padding: 14px 0; border-top: 1px solid #F1EDE2">
+              <span style="{{ r.badgeCss }}">{{ r.name }}</span>
+              <div style="flex: 1">
+                <div style="font-size: 13px; line-height: 1.6; color: #4A5A6E">{{ r.desc }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #8A94A2">Members</div>
+        <div style="display: flex; flex-direction: column; margin-top: 12px">
+          <sc-for list="{{ members }}" as="m" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid #F1EDE2">
+              <div><div style="font-size: 14px; font-weight: 700">{{ m.name }}</div><div style="font-size: 12px; color: #8A94A2">{{ m.email }}</div></div>
+              <span style="{{ m.roleCss }}">{{ m.role }}</span>
+              <span style="{{ m.stateCss }}">{{ m.state }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px; margin-top: 16px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div>
+          <div style="font-size: 15px; font-weight: 700">Partner workspaces</div>
+          <div style="font-size: 12px; color: #8A94A2; margin-top: 3px">White-labeled instances for EOS implementers in the Phoenix Operations network — each with its own brand, guide page, funnels, and CRM.</div>
+        </div>
+        <button style="border: 1.5px solid #D96C2C; background: none; color: #D96C2C; border-radius: 6px; padding: 10px 18px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer" style-hover="background: #FBEFE4">+ New partner workspace</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px">
+        <sc-for list="{{ partners }}" as="p" hint-placeholder-count="3">
+          <div style="border: 1px solid #E7E2D6; border-radius: 10px; padding: 18px">
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <span style="font-size: 14px; font-weight: 800">{{ p.name }}</span>
+              <span style="{{ p.stateCss }}">{{ p.state }}</span>
+            </div>
+            <div style="font-size: 12px; color: #8A94A2; margin-top: 4px">{{ p.domain }}</div>
+            <div style="margin-top: 10px"><span style="{{ p.typeCss }}">{{ p.type }}</span></div>
+            <div style="display: flex; gap: 16px; font-size: 12px; margin-top: 12px; border-top: 1px solid #F1EDE2; padding-top: 10px">
+              <span><strong>{{ p.funnels }}</strong> funnels</span>
+              <span><strong>{{ p.leads }}</strong> leads</span>
+              <span><strong>{{ p.users }}</strong> users</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+<sc-if value="{{ isIntegrations }}" hint-placeholder-val="{{ false }}">
+  <section data-screen-label="Integrations">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 800">Integrations</h1>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <div style="display: flex; align-items: center; gap: 12px">
+              <span style="width: 40px; height: 40px; border-radius: 10px; background: #FF4F00; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">⚡</span>
+              <div><div style="font-size: 16px; font-weight: 700">Zapier</div><div style="font-size: 12px; color: #2E7D43; font-weight: 700">● Connected</div></div>
+            </div>
+            <button style="border: 1.5px solid #E7E2D6; background: none; color: #4A5A6E; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer">Manage</button>
+          </div>
+          <div style="margin-top: 18px; font-size: 13px; font-weight: 700">Outbound events</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px">
+            <sc-for list="{{ zapEvents }}" as="z" hint-placeholder-count="4">
+              <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #F1EDE2; border-radius: 8px; padding: 10px 14px">
+                <code style="font-size: 12px; font-weight: 700; color: #14263B">{{ z.event }}</code>
+                <span style="font-size: 12px; color: #6A7686">{{ z.desc }}</span>
+                <span style="{{ z.css }}">{{ z.state }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top: 16px; font-size: 13px; font-weight: 700">Sample payload — <code style="font-weight: 400">lead.qualified</code></div>
+          <pre style="margin: 10px 0 0; background: #14263B; color: #C9E4D2; border-radius: 8px; padding: 16px 18px; font-size: 11.5px; line-height: 1.6; overflow-x: auto">{{ zapPayload }}</pre>
+          <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; background: #FBF4E9; border: 1px solid #EDDCC0; border-radius: 8px; padding: 10px 14px">
+            <code style="font-size: 12px; color: #4A5A6E">POST /api/webhooks/zapier/inbound</code>
+            <span style="font-size: 11px; font-weight: 700; color: #8A94A2">Inbound updates · token auth</span>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <div style="display: flex; align-items: center; gap: 12px">
+              <span style="width: 40px; height: 40px; border-radius: 10px; background: #EAF0F6; color: #14263B; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800">✉</span>
+              <div><div style="font-size: 16px; font-weight: 700">SendGrid</div><div style="font-size: 12px; color: #2E7D43; font-weight: 700">● Connected</div></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 14px; font-size: 13px">
+            <div style="display: flex; justify-content: space-between; border: 1px solid #F1EDE2; border-radius: 8px; padding: 10px 14px"><span>Intake confirmation → prospect</span><span style="color: #2E7D43; font-weight: 700">On</span></div>
+            <div style="display: flex; justify-content: space-between; border: 1px solid #F1EDE2; border-radius: 8px; padding: 10px 14px"><span>New-lead notification → Joshua</span><span style="color: #2E7D43; font-weight: 700">On</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E7E2D6; border-radius: 12px; padding: 24px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 40px; height: 40px; border-radius: 10px; background: #FF7A59; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800">H</span>
+            <div><div style="font-size: 16px; font-weight: 700">HubSpot</div><div style="font-size: 12px; color: #2E7D43; font-weight: 700">● OAuth connected · rate-limit aware</div></div>
+          </div>
+          <button style="border: 1.5px solid #E7E2D6; background: none; color: #4A5A6E; border-radius: 6px; padding: 8px 14px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer">Field mapping</button>
+        </div>
+        <div style="margin-top: 18px; font-size: 13px; font-weight: 700">Sync direction</div>
+        <div style="display: flex; gap: 8px; margin-top: 10px">
+          <span style="border: 1.5px solid #D96C2C; background: #FBEFE4; color: #B5541C; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 700">Two-way</span>
+          <span style="border: 1.5px solid #E7E2D6; color: #8A94A2; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 700">Push only</span>
+          <span style="border: 1.5px solid #E7E2D6; color: #8A94A2; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 700">Pull only</span>
+        </div>
+        <div style="margin-top: 14px; font-size: 13px; font-weight: 700">Conflict handling</div>
+        <div style="margin-top: 8px; font-size: 13px; color: #4A5A6E; border: 1px solid #F1EDE2; border-radius: 8px; padding: 10px 14px">Most recent edit wins · CRM is source of truth for score & stage</div>
+        <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center">
+          <div style="font-size: 13px; font-weight: 700">Sync log</div>
+          <span style="font-size: 12px; color: #8A94A2">Last full sync 09:41 AM</span>
+        </div>
+        <div style="display: flex; flex-direction: column; margin-top: 10px">
+          <sc-for list="{{ syncLog }}" as="s" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 70px 1fr auto; gap: 12px; align-items: center; padding: 9px 4px; border-top: 1px solid #F1EDE2; font-size: 12px">
+              <span style="color: #B4AC98">{{ s.time }}</span>
+              <span style="color: #4A5A6E">{{ s.msg }}</span>
+              <span style="{{ s.css }}">{{ s.state }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+</sc-if>
+
+</main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let extLeads = [];
+    try { extLeads = JSON.parse(localStorage.getItem('po-leads') || '[]'); } catch (e) {}
+    const seed = [
+      { id: 1, name: 'Marcus Webb', company: 'Webb Mechanical', role: 'Owner / Founder', email: 'marcus@webbmech.com', funnel: 'Lack of Control', source: 'google / cpc', score: 88, stage: 1, owner: 'Joshua' },
+      { id: 2, name: 'Sarah Delgado', company: 'Delgado Electric', role: 'CEO / President', email: 'sarah@delgadoelectric.com', funnel: 'Lack of Control', source: 'linkedin / organic', score: 76, stage: 2, owner: 'Joshua' },
+      { id: 3, name: 'Tom Brantley', company: 'Brantley HVAC', role: 'Owner / Founder', email: 'tom@brantleyhvac.com', funnel: 'Lack of Profit', source: 'referral', score: 91, stage: 2, owner: 'Joshua' },
+      { id: 4, name: 'Priya Nair', company: 'Nair Consulting', role: 'COO / Operations', email: 'priya@nairconsulting.com', funnel: 'People', source: 'newsletter', score: 54, stage: 0, owner: '—' },
+      { id: 5, name: 'Dale Hutchins', company: 'Hutchins Plumbing Co.', role: 'Owner / Founder', email: 'dale@hutchinsplumbing.com', funnel: 'Lack of Control', source: 'google / cpc', score: 83, stage: 3, owner: 'Joshua' },
+      { id: 6, name: 'Renee Alcott', company: 'Alcott Landscapes', role: 'Owner / Founder', email: 'renee@alcottlandscapes.com', funnel: 'Hitting the Ceiling', source: 'facebook / paid', score: 67, stage: 1, owner: 'Joshua' },
+      { id: 7, name: 'Gene Park', company: 'Park Manufacturing', role: 'Other leadership', email: 'gene@parkmfg.com', funnel: 'Nothing Works', source: 'referral', score: 41, stage: 0, owner: '—' },
+      { id: 8, name: 'Chris Crew', company: 'The Blue Collar Success Group', role: 'President', email: 'chris@bluecollarsuccess.com', funnel: 'Referral', source: 'referral', score: 91, stage: 2, owner: 'Joshua', pipeline: 'clients' },
+      { id: 9, name: 'Danielle Putnam', company: 'The New Flat Rate', role: 'CEO / President', email: 'danielle@newflatrate.com', funnel: 'Referral', source: 'referral', score: 88, stage: 2, owner: 'Joshua', pipeline: 'clients' },
+      { id: 10, name: 'Lincoln Higdon', company: 'Centerpoint IT', role: 'CEO / President', email: 'lincoln@centerpointit.com', funnel: 'Lack of Control', source: 'google / cpc', score: 84, stage: 1, owner: 'Joshua', pipeline: 'clients' },
+      { id: 11, name: 'Teresa Vance', company: 'Vance Roofing', role: 'Owner / Founder', email: 'teresa@vanceroofing.com', funnel: 'Hitting the Ceiling', source: 'referral', score: 79, stage: 0, owner: 'Joshua', pipeline: 'clients' },
+    ];
+    extLeads.forEach((l, i) => {
+      if (l.answers?.email && !seed.some(s => s.email === l.answers.email)) {
+        seed.unshift({ id: 100 + i, name: l.answers.name || '(no name)', company: l.answers.company || '—', role: l.answers.role || '—', email: l.answers.email, funnel: 'Lack of Control', source: l.utm?.utm_source ? l.utm.utm_source + ' / ' + (l.utm.utm_medium || 'direct') : 'direct', score: l.score ?? 50, stage: 0, owner: '—', live: true });
+      }
+    });
+    this.state = { view: 'dashboard', contacts: seed, selectedId: null, builderId: null, stageFilter: 'All', search: '', blocksOff: {}, notes: {}, cmsPage: 'home', cmsOff: {}, members: null };
+  }
+  scoreCss(score) {
+    const bg = score >= 75 ? '#E8F3EA' : score >= 55 ? '#FBF4E9' : '#F6E8E6';
+    const fg = score >= 75 ? '#2E7D43' : score >= 55 ? '#B5541C' : '#B04A3A';
+    return `background: ${bg}; color: ${fg}; font-size: 12px; font-weight: 800; border-radius: 20px; padding: 4px 10px; text-align: center;`;
+  }
+  renderVals() {
+    const st = this.state;
+    const pipelines = {
+      prospects: { label: 'Prospects', desc: 'Potential clients moving from intake to engagement', stages: ['New', 'Qualified', 'Call scheduled', 'In conversation'] },
+      clients: { label: 'Client journey', desc: 'Active clients — tracking the coaching experience end to end', stages: ['Onboarding', 'Foundation', 'Traction', 'Graduated'] },
+    };
+    const pid = st.pipelineId || 'prospects';
+    const stages = pipelines[pid].stages;
+    const view = st.view;
+    const navDef = [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'funnels', label: 'Funnels' },
+      { id: 'contacts', label: 'Contacts' },
+      { id: 'sequences', label: 'Sequences' },
+      { id: 'content', label: 'Site Content' },
+      { id: 'branding', label: 'White Label' },
+      { id: 'network', label: 'Users & Network' },
+      { id: 'billing', label: 'Billing' },
+      { id: 'integrations', label: 'Integrations' },
+    ];
+    const activeNav = view === 'builder' ? 'funnels' : view === 'contactDetail' ? 'contacts' : view;
+    const filtered = st.contacts.filter(c => (c.pipeline || 'prospects') === pid).filter(c =>
+      (st.stageFilter === 'All' || stages[c.stage] === st.stageFilter) &&
+      (!st.search || (c.name + c.company + c.email).toLowerCase().includes(st.search.toLowerCase()))
+    );
+    const sel = st.contacts.find(c => c.id === st.selectedId);
+    const tags = c => [c.score >= 70 ? 'Coachable' : null, c.score >= 75 ? 'ICP-fit' : null, c.score >= 85 ? 'Hot' : null].filter(Boolean).join(' · ') || 'Low-fit';
+    const blocks = [
+      { id: 'frustration', name: 'Frustration deep-dive', desc: '3 questions · Conversation Guide: Lack of Control', req: 'Required', conditional: false },
+      { id: 'firmographics', name: 'Business profile', desc: 'Industry, revenue, team size, clients, years', req: 'Required', conditional: false },
+      { id: 'contact', name: 'Contact info', desc: 'Name, email, company, phone, role', req: 'Required', conditional: false },
+      { id: 'ownerJoin', name: 'Owner attendance', desc: 'Shown only when respondent is not the owner/CEO', req: 'Optional', conditional: true, condition: 'role ≠ Owner/Founder and role ≠ CEO/President' },
+      { id: 'coachability', name: 'Coachability self-assessment', desc: '2 Likert questions + "what have you tried"', req: 'Required', conditional: false },
+    ];
+    const notes = st.notes[st.selectedId] || [];
+    return {
+      navItems: navDef.map(n => ({ ...n, css: `text-align: left; border: none; border-radius: 8px; padding: 12px 14px; font-family: Poppins, sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; background: ${n.id === activeNav ? 'rgba(217,108,44,0.18)' : 'none'}; color: ${n.id === activeNav ? '#E8894E' : '#C7D1DE'};` })),
+      nav: (e) => this.setState({ view: e.currentTarget.dataset.view }),
+      isDashboard: view === 'dashboard', isFunnels: view === 'funnels', isBuilder: view === 'builder',
+      isContacts: view === 'contacts', isContactDetail: view === 'contactDetail', isIntegrations: view === 'integrations',
+      isContent: view === 'content', isBranding: view === 'branding', isNetwork: view === 'network',
+      isSequences: view === 'sequences', isBilling: view === 'billing',
+      sequences: [
+        { name: 'Booked call — reminders', trigger: 'intake.completed + slot booked', state: 'Active', stat: '94%', statLabel: 'show rate', steps: [
+          { kind: 'Email', label: 'Confirmation (immediate)', color: '#D96C2C', arrow: '→' },
+          { kind: 'Email', label: 'Reminder — 24h before', color: '#D96C2C', arrow: '→' },
+          { kind: 'Email', label: 'Reminder — 1h before', color: '#D96C2C', arrow: '→' },
+          { kind: 'CRM', label: 'Stage → Call scheduled', color: '#3A5474', arrow: '' },
+        ] },
+        { name: 'No-show recovery', trigger: 'call marked no-show', state: 'Active', stat: '41%', statLabel: 'rebook rate', steps: [
+          { kind: 'Email', label: '"We missed you" + rebook link (1h)', color: '#D96C2C', arrow: '→' },
+          { kind: 'Task', label: 'Owner: personal follow-up (day 2)', color: '#B5541C', arrow: '→' },
+          { kind: 'Email', label: 'Last nudge (day 5)', color: '#D96C2C', arrow: '→' },
+          { kind: 'CRM', label: 'No response → stage Dormant', color: '#3A5474', arrow: '' },
+        ] },
+        { name: 'Post-call follow-through', trigger: 'call logged as completed', state: 'Active', stat: '2.4d', statLabel: 'avg. next step', steps: [
+          { kind: 'Task', label: 'Owner: send recap notes (same day)', color: '#B5541C', arrow: '→' },
+          { kind: 'Email', label: 'Recap + proposed next step', color: '#D96C2C', arrow: '→' },
+          { kind: 'CRM', label: 'Stage → In conversation', color: '#3A5474', arrow: '→' },
+          { kind: 'Zap', label: 'stage.changed webhook', color: '#2E7D43', arrow: '' },
+        ] },
+        { name: 'Abandoned intake', trigger: 'intake started, idle 24h', state: 'Paused', stat: '18%', statLabel: 'resume rate', steps: [
+          { kind: 'Email', label: '"Pick up where you left off" (24h)', color: '#D96C2C', arrow: '→' },
+          { kind: 'Email', label: 'Value nudge: results page link (day 3)', color: '#D96C2C', arrow: '' },
+        ] },
+      ].map(q => ({ ...q, stateCss: this.pill(q.state === 'Active' ? '#E8F3EA' : '#F1EDE2', q.state === 'Active' ? '#2E7D43' : '#8A94A2') })),
+      planCards: [
+        { name: 'Solo', price: '$79', popular: false, features: ['1 user', '2 funnels', 'CRM + pipeline', 'Zapier webhooks', 'Email sequences'] },
+        { name: 'Practice', price: '$179', popular: true, features: ['5 users', 'Unlimited funnels', 'HubSpot two-way sync', 'Custom domain + white label', 'A/B variants'] },
+        { name: 'Network', price: '$399', popular: false, features: ['Unlimited users', 'Multiple partner workspaces', 'Network rollup analytics', 'Priority support', 'Custom connector slots'] },
+      ].map(p => ({ ...p, cardCss: `background: #fff; border: 2px solid ${p.popular ? '#D96C2C' : '#E7E2D6'}; border-radius: 12px; padding: 24px;` })),
+      subs: [
+        { name: 'Phoenix Operations', domain: 'phoenixoperations.com', plan: 'Network', since: 'Jan 2026', amount: '$399', state: 'Active' },
+        { name: 'Blue Collar Ops', domain: 'ops.bluecollarsuccess.com', plan: 'Practice', since: 'Mar 2026', amount: '$179', state: 'Active' },
+        { name: 'Alcott Operations', domain: 'alcottops.com', plan: 'Solo', since: 'Aug 2026', amount: '$79', state: 'Trial · 9 days left' },
+      ].map(s => ({ ...s, stateCss: this.pill(s.state === 'Active' ? '#E8F3EA' : '#FBF4E9', s.state === 'Active' ? '#2E7D43' : '#B5541C') })),
+      cmsPages: [
+        { id: 'home', name: 'Homepage', meta: '6 sections · Published' },
+        { id: 'guide', name: 'Meet Your Guide', meta: '4 sections · Published' },
+        { id: 'results', name: 'Results (private)', meta: '5 sections · Link-only' },
+        { id: 'funnelTpl', name: 'Funnel template', meta: 'StoryBrand · 5 blocks' },
+      ].map(p => ({ ...p, css: `text-align: left; border: none; border-radius: 8px; padding: 12px 14px; font-family: Poppins, sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; background: ${(st.cmsPage || 'home') === p.id ? '#FBEFE4' : 'none'}; color: ${(st.cmsPage || 'home') === p.id ? '#B5541C' : '#14263B'};` })),
+      pickPage: (e) => this.setState({ cmsPage: e.currentTarget.dataset.id }),
+      cmsSections: ({
+        home: [
+          { id: 'hero', name: 'Hero', desc: 'Headline, frustration selector, primary CTA' },
+          { id: 'howwho', name: 'How It Works + Who We Help', desc: 'Two-column: 4 steps, 4 traits, inline testimonial' },
+          { id: 'guideband', name: 'Guide band', desc: 'Compact intro linking to the guide page' },
+          { id: 'results', name: 'Client Perspectives', desc: '3 testimonial cards' },
+          { id: 'faq', name: 'FAQ', desc: '4 questions, accordion' },
+          { id: 'footer', name: 'Footer CTA', desc: 'Ready to take the first step + schedule button' },
+        ],
+        guide: [
+          { id: 'ghero', name: 'Guide hero', desc: 'Circular photo, story, CTA — pulls from Guide identity' },
+          { id: 'gpillars', name: 'Experience pillars', desc: '3 columns of background' },
+          { id: 'gquotes', name: 'Guide testimonials', desc: '2 attributed quotes' },
+          { id: 'gfooter', name: 'Footer CTA', desc: 'Shared footer module' },
+        ],
+        results: [
+          { id: 'rhero', name: 'Results hero', desc: 'EOS framing statement' },
+          { id: 'rstats', name: 'Headline metrics', desc: '2.8× study, 100K+ adoption, six components' },
+          { id: 'rcomponents', name: 'Six Key Components', desc: 'V/P/D/I/Pr/T cards with results' },
+          { id: 'rtimeline', name: 'What owners see, and when', desc: '90 days / year one / year two+' },
+          { id: 'rproof', name: 'Client proof', desc: '4 quotes + trademark attribution' },
+        ],
+        funnelTpl: [
+          { id: 'fhero', name: 'StoryBrand hero', desc: 'Hero/problem/guide/plan/success — per-funnel copy' },
+          { id: 'fstakes', name: 'Sound familiar card', desc: '3 stakes + guide credibility note' },
+          { id: 'fintake', name: 'Intake form', desc: 'Modular blocks — managed per funnel' },
+          { id: 'fschedule', name: 'Scheduler', desc: 'Post-submit booking step' },
+        ],
+      })[st.cmsPage || 'home'].map(s => {
+        const off = st.cmsOff[(st.cmsPage || 'home') + ':' + s.id];
+        return { ...s, toggleLabel: off ? 'Off' : 'On', toggleCss: `border: none; border-radius: 20px; padding: 7px 16px; font-family: Poppins, sans-serif; font-size: 12px; font-weight: 800; cursor: pointer; background: ${off ? '#F1EDE2' : '#E8F3EA'}; color: ${off ? '#8A94A2' : '#2E7D43'};` };
+      }),
+      toggleSection: (e) => {
+        const key = (st.cmsPage || 'home') + ':' + e.currentTarget.dataset.id;
+        this.setState(s => ({ cmsOff: { ...s.cmsOff, [key]: !s.cmsOff[key] } }));
+      },
+      networkKpis: [
+        { label: 'Network leads (30d)', value: '263', delta: '▲ 11% vs prior', deltaColor: '#2E7D43' },
+        { label: 'Avg. workspace CVR', value: '5.9%', delta: '▲ 0.4pt vs prior', deltaColor: '#2E7D43' },
+        { label: 'Active workspaces', value: '3', delta: '1 onboarding', deltaColor: '#B5541C' },
+        { label: 'Network MRR', value: '$657', delta: '▲ $79 vs prior', deltaColor: '#2E7D43' },
+      ],
+      roles: [
+        { name: 'Admin', desc: 'Top of the hierarchy. Full control: branding, white label, users, partner workspaces, integrations, and all CRM data. Invites everyone else.', badgeCss: this.pill('#14263B', '#fff') + ' align-self: flex-start; padding: 6px 14px;' },
+        { name: 'Owner', desc: 'Runs a workspace: funnels, site content, CRM, and their own staff invites. Cannot touch other workspaces or platform settings.', badgeCss: this.pill('#FBEFE4', '#B5541C') + ' align-self: flex-start; padding: 6px 14px;' },
+        { name: 'Staff', desc: 'Works leads: contacts, pipeline, notes, tasks. No access to funnels, branding, or user management.', badgeCss: this.pill('#F1EDE2', '#6A7686') + ' align-self: flex-start; padding: 6px 14px;' },
+        { name: 'Partner', desc: 'An EOS implementer in the network — owner of their own white-labeled workspace, connected to Phoenix Operations for referrals and shared playbooks.', badgeCss: this.pill('#E8F3EA', '#2E7D43') + ' align-self: flex-start; padding: 6px 14px;' },
+      ],
+      members: (st.members || [
+        { name: 'Joshua Kornitsky', email: 'joshua@phoenixoperations.com', role: 'Admin', state: 'Active' },
+        { name: 'Dana Whitfield', email: 'dana@phoenixoperations.com', role: 'Staff', state: 'Active' },
+        { name: 'Chris Crew', email: 'chris@bluecollarsuccess.com', role: 'Partner', state: 'Active' },
+        { name: 'Renee Alcott', email: 'renee@alcottops.com', role: 'Partner', state: 'Invited' },
+      ]).map(m => ({ ...m,
+        roleCss: this.pill(m.role === 'Admin' ? '#14263B' : m.role === 'Partner' ? '#E8F3EA' : '#F1EDE2', m.role === 'Admin' ? '#fff' : m.role === 'Partner' ? '#2E7D43' : '#6A7686'),
+        stateCss: this.pill(m.state === 'Active' ? '#E8F3EA' : '#FBF4E9', m.state === 'Active' ? '#2E7D43' : '#B5541C'),
+      })),
+      invite: () => {
+        const email = prompt('Invite by email:');
+        if (email) this.setState(s => ({ members: [...(s.members || [
+          { name: 'Joshua Kornitsky', email: 'joshua@phoenixoperations.com', role: 'Admin', state: 'Active' },
+          { name: 'Dana Whitfield', email: 'dana@phoenixoperations.com', role: 'Staff', state: 'Active' },
+          { name: 'Chris Crew', email: 'chris@bluecollarsuccess.com', role: 'Partner', state: 'Active' },
+          { name: 'Renee Alcott', email: 'renee@alcottops.com', role: 'Partner', state: 'Invited' },
+        ]), { name: email.split('@')[0], email, role: 'Staff', state: 'Invited' }] }));
+      },
+      partners: [
+        { name: 'Phoenix Operations', domain: 'phoenixoperations.com', state: 'Live', type: 'EOS Implementer', funnels: '5', leads: '151', users: '2' },
+        { name: 'Blue Collar Ops', domain: 'ops.bluecollarsuccess.com', state: 'Live', type: 'EOS Implementer', funnels: '3', leads: '112', users: '4' },
+        { name: 'Alcott Operations', domain: 'alcottops.com', state: 'Onboarding', type: 'Ops Consultant', funnels: '1', leads: '—', users: '1' },
+      ].map(p => ({ ...p, stateCss: this.pill(p.state === 'Live' ? '#E8F3EA' : '#FBF4E9', p.state === 'Live' ? '#2E7D43' : '#B5541C'), typeCss: this.pill(p.type === 'EOS Implementer' ? '#EAF0F6' : '#F1EDE2', p.type === 'EOS Implementer' ? '#14263B' : '#6A7686') })),
+      kpis: [
+        { label: 'Visits', value: '1,284', delta: '▲ 12% vs prior', deltaColor: '#2E7D43' },
+        { label: 'Started intake', value: '211', delta: '▲ 9% vs prior', deltaColor: '#2E7D43' },
+        { label: 'Completed', value: String(86 + st.contacts.filter(c => c.live).length), delta: '▲ 15% vs prior', deltaColor: '#2E7D43' },
+        { label: 'Qualified (70+)', value: String(st.contacts.filter(c => c.score >= 70).length + 29), delta: '▼ 3% vs prior', deltaColor: '#B04A3A' },
+      ],
+      funnelBars: [
+        { label: 'Visits', n: '1,284', h: '100%', rate: '—', color: '#14263B' },
+        { label: 'Started', n: '211', h: '46%', rate: '16.4%', color: '#3A5474' },
+        { label: 'Completed', n: '86', h: '28%', rate: '40.8%', color: '#D96C2C' },
+        { label: 'Qualified', n: '34', h: '15%', rate: '39.5%', color: '#E8894E' },
+      ],
+      sources: [
+        { name: 'google / cpc', n: 31, pct: '100%' },
+        { name: 'referral', n: 22, pct: '71%' },
+        { name: 'linkedin / organic', n: 18, pct: '58%' },
+        { name: 'facebook / paid', n: 9, pct: '29%' },
+      ],
+      hotLeads: st.contacts.filter(c => c.score >= 70).slice(0, 4).map(c => ({ ...c, score: String(c.score), scoreCss: this.scoreCss(c.score), stage: stages[c.stage] })),
+      goContacts: () => this.setState({ view: 'contacts' }),
+      openContactRow: (e) => this.setState({ view: 'contactDetail', selectedId: Number(e.currentTarget.dataset.id) }),
+      funnels: [
+        { id: 'control', name: 'Lack of Control', status: 'Live', headline: '"The business shouldn\u2019t run you." — for founders whose company controls them', slug: 'lack-of-control', variants: '2 variants', visits: '1,284', leads: '86', cvr: '6.7%', pageHref: 'Funnel Landing.dc.html' },
+        { id: 'profit', name: 'Lack of Profit', status: 'Live', headline: '"Working this hard should show up in the numbers."', slug: 'lack-of-profit', variants: '1 variant', visits: '702', leads: '38', cvr: '5.4%', pageHref: 'Funnel Landing.dc.html' },
+        { id: 'people', name: 'People', status: 'Draft', headline: '"Stop being the only one who cares as much as you do."', slug: 'people', variants: '1 variant', visits: '—', leads: '—', cvr: '—', pageHref: 'Funnel Landing.dc.html' },
+        { id: 'ceiling', name: 'Hitting the Ceiling', status: 'Live', headline: '"What got you here won\u2019t get you there."', slug: 'hitting-the-ceiling', variants: '2 variants', visits: '449', leads: '21', cvr: '4.7%', pageHref: 'Funnel Landing.dc.html' },
+        { id: 'nothing', name: 'Nothing Works', status: 'Paused', headline: '"You\u2019ve tried everything. The problems keep coming back."', slug: 'nothing-works', variants: '1 variant', visits: '188', leads: '6', cvr: '3.2%', pageHref: 'Funnel Landing.dc.html' },
+      ].map(f => ({ ...f, statusCss: `font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 20px; padding: 5px 12px; background: ${f.status === 'Live' ? '#E8F3EA' : f.status === 'Draft' ? '#F1EDE2' : '#F6E8E6'}; color: ${f.status === 'Live' ? '#2E7D43' : f.status === 'Draft' ? '#8A94A2' : '#B04A3A'};` })),
+      newFunnel: () => this.setState({ view: 'builder', builderId: 'new' }),
+      editFunnel: (e) => this.setState({ view: 'builder', builderId: e.currentTarget.dataset.id }),
+      backToFunnels: () => this.setState({ view: 'funnels' }),
+      builderName: st.builderId === 'new' ? 'New funnel' : 'Lack of Control',
+      storyBlocks: [
+        { role: 'Hero (prospect)', copy: 'A founder whose business controls them more than they control it' },
+        { role: 'Problem', copy: 'Every decision routes through you. Every fire finds you.' },
+        { role: 'Guide', copy: 'Joshua — "I\u2019ve sat in your seat."' },
+        { role: 'Plan', copy: 'A free 15-minute conversation. No prep, no pressure, no pitch.' },
+        { role: 'Success', copy: 'Clarity on the obstacles and what needs attention first' },
+      ],
+      formBlocks: blocks.map(b => {
+        const off = st.blocksOff[b.id];
+        return { ...b,
+          reqCss: `font-size: 11px; font-weight: 800; letter-spacing: 0.04em; border-radius: 4px; padding: 4px 8px; background: ${b.req === 'Required' ? '#14263B' : '#F1EDE2'}; color: ${b.req === 'Required' ? '#fff' : '#8A94A2'};`,
+          toggleLabel: off ? 'Off' : 'On',
+          toggleCss: `border: none; border-radius: 20px; padding: 6px 14px; font-family: Poppins, sans-serif; font-size: 12px; font-weight: 800; cursor: pointer; background: ${off ? '#F1EDE2' : '#E8F3EA'}; color: ${off ? '#8A94A2' : '#2E7D43'};`,
+        };
+      }),
+      toggleBlock: (e) => {
+        const id = e.currentTarget.dataset.id;
+        this.setState(s => ({ blocksOff: { ...s.blocksOff, [id]: !s.blocksOff[id] } }));
+      },
+      weights: [
+        { name: 'Coachability', pts: '25', pct: '100%' },
+        { name: 'Authority (role)', pts: '20', pct: '80%' },
+        { name: 'ICP fit', pts: '40', pct: '90%' },
+        { name: 'Urgency', pts: '15', pct: '60%' },
+      ],
+      stageFilters: ['All', ...stages].map(name => ({ name, css: `border: 1.5px solid ${st.stageFilter === name ? '#D96C2C' : '#E7E2D6'}; background: ${st.stageFilter === name ? '#FBEFE4' : '#fff'}; color: ${st.stageFilter === name ? '#B5541C' : '#6A7686'}; border-radius: 20px; padding: 9px 16px; font-family: Poppins, sans-serif; font-size: 12px; font-weight: 700; cursor: pointer;` })),
+      setStageFilter: (e) => this.setState({ stageFilter: e.currentTarget.dataset.stage }),
+      onSearch: (e) => this.setState({ search: e.target.value }),
+      pipelineTabs: Object.entries(pipelines).map(([id, p]) => ({ id, label: p.label, css: `border: none; border-radius: 6px; padding: 8px 14px; font-family: Poppins, sans-serif; font-size: 12.5px; font-weight: 700; cursor: pointer; background: ${pid === id ? '#14263B' : 'none'}; color: ${pid === id ? '#fff' : '#6A7686'};` })),
+      pickPipeline: (e) => this.setState({ pipelineId: e.currentTarget.dataset.id }),
+      pipelineDesc: pipelines[pid].desc,
+      pipeline: stages.map((name, i) => {
+        const cards = filtered.filter(c => c.stage === i).map(c => ({ ...c, score: String(c.score), scoreCss: this.scoreCss(c.score) }));
+        return { name, idx: String(i), count: String(cards.length), cards, colCss: `background: ${st.dragOverCol === i ? '#E3DECE' : '#EDEAE0'}; border-radius: 12px; padding: 14px; transition: background 0.15s;` };
+      }),
+      dragStart: (e) => { e.dataTransfer.setData('text/plain', e.currentTarget.dataset.id); e.dataTransfer.effectAllowed = 'move'; },
+      dragOver: (e) => { e.preventDefault(); const col = Number(e.currentTarget.dataset.stage); if (st.dragOverCol !== col) this.setState({ dragOverCol: col }); },
+      drop: (e) => {
+        e.preventDefault();
+        const id = Number(e.dataTransfer.getData('text/plain'));
+        const stage = Number(e.currentTarget.dataset.stage);
+        this.setState(s => ({ dragOverCol: null, contacts: s.contacts.map(c => c.id === id ? { ...c, stage } : c) }));
+      },
+      addCard: () => this.addContactCard(pid, 0),
+      addCardTo: (e) => this.addContactCard(pid, Number(e.currentTarget.dataset.stage)),
+      moveFwd: (e) => { e.stopPropagation(); const id = Number(e.currentTarget.dataset.id); this.setState(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, stage: Math.min(3, c.stage + 1) } : c) })); },
+      moveBack: (e) => { e.stopPropagation(); const id = Number(e.currentTarget.dataset.id); this.setState(s => ({ contacts: s.contacts.map(c => c.id === id ? { ...c, stage: Math.max(0, c.stage - 1) } : c) })); },
+      dName: sel?.name || '', dCompany: sel?.company || '', dRole: sel?.role || '',
+      dInitials: (sel?.name || '?').split(' ').map(w => w[0]).slice(0, 2).join(''),
+      dScore: String(sel?.score ?? ''), dTags: sel ? tags(sel) : '',
+      dFields: sel ? [
+        { k: 'Email', v: sel.email }, { k: 'Funnel', v: sel.funnel }, { k: 'Source', v: sel.source },
+        { k: 'Stage', v: stages[sel.stage] }, { k: 'Owner', v: sel.owner }, { k: 'Created', v: 'Sep 1, 2026' },
+      ] : [],
+      dTimeline: sel ? [
+        ...notes.map(n => ({ glyph: '✎', dotCss: this.dot('#D96C2C'), title: n.title, when: 'Just now', body: n.body })),
+        { glyph: '✓', dotCss: this.dot('#2E7D43'), title: 'Intake completed — scored ' + sel.score, when: 'Sep 1, 9:14 AM', body: 'Least control: scheduling, team accountability. "Every pricing call still comes to me." Coachability 4/5 and 5/5.' },
+        { glyph: '◔', dotCss: this.dot('#3A5474'), title: 'Intake started', when: 'Sep 1, 9:08 AM', body: 'Landed on /lack-of-control (variant A) · ' + sel.source },
+        { glyph: '👁', dotCss: this.dot('#B4AC98'), title: 'Page view', when: 'Sep 1, 9:06 AM', body: 'utm_campaign=founders-q3 · first visit' },
+        { glyph: '✉', dotCss: this.dot('#B4AC98'), title: 'Confirmation email sent', when: 'Sep 1, 9:15 AM', body: 'SendGrid · intake-confirmation template · delivered' },
+      ] : [],
+      addNote: () => {
+        const body = prompt('Note:');
+        if (body) this.setState(s => ({ notes: { ...s.notes, [s.selectedId]: [{ title: 'Note added', body }, ...(s.notes[s.selectedId] || [])] } }));
+      },
+      addTask: () => {
+        const body = prompt('Task (due date in text):');
+        if (body) this.setState(s => ({ notes: { ...s.notes, [s.selectedId]: [{ title: 'Task created', body }, ...(s.notes[s.selectedId] || [])] } }));
+      },
+      zapEvents: [
+        { event: 'lead.created', desc: 'New intake submission', state: 'Active', css: this.pill('#E8F3EA', '#2E7D43') },
+        { event: 'intake.completed', desc: 'All steps finished', state: 'Active', css: this.pill('#E8F3EA', '#2E7D43') },
+        { event: 'lead.qualified', desc: 'Score crosses threshold (70)', state: 'Active', css: this.pill('#E8F3EA', '#2E7D43') },
+        { event: 'stage.changed', desc: 'Pipeline stage moved', state: 'Paused', css: this.pill('#F1EDE2', '#8A94A2') },
+      ],
+      zapPayload: JSON.stringify({ event: 'lead.qualified', lead: { id: 'ld_8x2k', name: 'Marcus Webb', email: 'marcus@webbmech.com', company: 'Webb Mechanical', funnel: 'lack-of-control', score: 88, tags: ['coachable', 'icp-fit', 'hot'], utm: { source: 'google', medium: 'cpc', campaign: 'founders-q3' } }, occurred_at: '2026-09-01T13:14:02Z' }, null, 2),
+      syncLog: [
+        { time: '09:41', msg: 'Contacts batch → HubSpot (12 records)', state: '✓ OK', css: this.pill('#E8F3EA', '#2E7D43') },
+        { time: '09:41', msg: 'Deals pull ← HubSpot (3 updated)', state: '✓ OK', css: this.pill('#E8F3EA', '#2E7D43') },
+        { time: '09:12', msg: 'Contact update → HubSpot (marcus@webbmech.com)', state: '✓ OK', css: this.pill('#E8F3EA', '#2E7D43') },
+        { time: '08:55', msg: 'Companies batch → HubSpot (429 rate limit)', state: '↻ Retried', css: this.pill('#FBF4E9', '#B5541C') },
+        { time: '08:55', msg: 'Retry succeeded after backoff (2.1s)', state: '✓ OK', css: this.pill('#E8F3EA', '#2E7D43') },
+        { time: '08:20', msg: 'Field mapping validated (14 fields, 2-way)', state: '✓ OK', css: this.pill('#E8F3EA', '#2E7D43') },
+      ],
+    };
+  }
+  addContactCard(pipeline, stage) {
+    const name = prompt('Contact name:');
+    if (!name) return;
+    const company = prompt('Company (optional):') || '—';
+    this.setState(s => ({ contacts: [...s.contacts, { id: Date.now(), name, company, role: '—', email: '—', funnel: 'Manual', source: 'manual', score: 50, stage, owner: 'Joshua', pipeline }] }));
+  }
+  dot(color) { return `width: 30px; height: 30px; border-radius: 50%; background: ${color}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; flex: none;`; }
+  pill(bg, fg) { return `background: ${bg}; color: ${fg}; font-size: 11px; font-weight: 800; border-radius: 20px; padding: 4px 10px; white-space: nowrap;`; }
+}
+</script>
+</body>
+</html>

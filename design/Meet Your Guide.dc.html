@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #F7F4EE; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; }
+  a:hover { color: #B5541C; }
+</style>
+</helmet>
+<div style="min-width: 1100px">
+<header data-screen-label="Nav" style="position: sticky; top: 0; z-index: 50; background: rgba(247,244,238,0.94); backdrop-filter: blur(8px); border-bottom: 1px solid #E5DFD2">
+  <div style="max-width: 1240px; margin: 0 auto; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px">
+    <a href="Phoenix Site.dc.html" style="display: flex"><img src="assets/logo.png" alt="Phoenix Operations" style="height: 66px; mix-blend-mode: multiply"></a>
+    <nav style="display: flex; align-items: center; gap: 36px">
+      <a href="Phoenix Site.dc.html" style="color: #14263B; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase">← Back to Site</a>
+      <a href="Funnel Landing.dc.html" style="border: 2px solid #D96C2C; color: #D96C2C; padding: 10px 22px; border-radius: 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase" style-hover="background: #D96C2C; color: #fff">Schedule a Call</a>
+    </nav>
+  </div>
+</header>
+
+<section data-screen-label="Guide Hero" style="background: #F7F4EE">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 72px 32px 80px; display: grid; grid-template-columns: 380px 1fr; gap: 72px; align-items: center">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 22px">
+      <div style="position: relative; width: 340px; height: 340px">
+        <div style="position: absolute; inset: -14px; border-radius: 50%; border: 2px solid #E5DACB"></div>
+        <div style="position: absolute; inset: -14px; border-radius: 50%; border-top: 3px solid #D96C2C; border-right: 3px solid transparent; border-bottom: 3px solid transparent; border-left: 3px solid transparent; transform: rotate(-45deg)"></div>
+        <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #E8E2D4; box-shadow: 0 18px 44px rgba(20,38,59,0.14)">
+          <img src="assets/headshot.jpg" alt="Joshua Kornitsky" style="width: 100%; height: 100%; object-fit: cover; object-position: top">
+        </div>
+      </div>
+      <div style="text-align: center">
+        <div style="font-size: 19px; font-weight: 800">Joshua Kornitsky</div>
+        <div style="font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #D96C2C; margin-top: 4px">Founder, Phoenix Operations</div>
+      </div>
+    </div>
+    <div>
+      <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #D96C2C">Your Guide</p>
+      <h1 style="margin: 12px 0 0; font-size: 48px; line-height: 1.12; font-weight: 800">I've sat in your seat.</h1>
+      <div style="width: 64px; height: 4px; background: #D96C2C; margin: 24px 0 26px"></div>
+      <p style="margin: 0; font-size: 17px; line-height: 1.7; color: #3A4A5E">I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses. I've seen what happens when growth starts creating more complexity than the people and processes were built to handle.</p>
+      <p style="margin: 24px 0 0; font-size: 20px; line-height: 1.6; font-weight: 700">You are the leading expert in your business, not me. But I know how to ask the questions that help light the path—so you can see the obstacles more clearly and decide what needs attention first.</p>
+      <a href="Funnel Landing.dc.html" style="display: inline-flex; align-items: center; gap: 12px; margin-top: 32px; background: #D96C2C; color: #fff; padding: 16px 28px; border-radius: 6px; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase" style-hover="background: #C05A1C; color: #fff">Schedule a 15-Minute Conversation <span style="font-size: 18px">→</span></a>
+    </div>
+  </div>
+</section>
+
+<section data-screen-label="Experience" style="background: #FFFFFF; border-top: 1px solid #EDE7DA">
+  <div style="max-width: 1240px; margin: 0 auto; padding: 80px 32px">
+    <h2 style="margin: 0; text-align: center; font-size: 36px; font-weight: 800">Where the perspective comes from</h2>
+    <div style="width: 56px; height: 4px; background: #D96C2C; margin: 18px auto 0"></div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 48px">
+      <sc-for list="{{ pillars }}" as="p" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 36px; border-left: 1px solid #EDE7DA; text-align: center; align-items: center">
+          <span style="color: #D96C2C; display: flex" dangerouslySetInnerHTML="{{ p.icon }}"></span>
+          <span style="font-size: 17px; font-weight: 700">{{ p.name }}</span>
+          <span style="font-size: 14px; line-height: 1.65; color: #4A5A6E">{{ p.blurb }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section data-screen-label="Guide Testimonials" style="background: #F7F4EE">
+  <div style="max-width: 1240px; margin: 0 auto; padding: 80px 32px">
+    <h2 style="margin: 0; text-align: center; font-size: 36px; font-weight: 800">What leaders say about working with Joshua</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 48px">
+      <sc-for list="{{ quotes }}" as="q" hint-placeholder-count="2">
+        <figure style="margin: 0; background: #FFFFFF; border: 1px solid #EDE7DA; border-radius: 12px; padding: 32px; display: flex; gap: 20px">
+          <span style="font-size: 48px; line-height: 0.8; color: #D96C2C; font-weight: 800">&ldquo;</span>
+          <div>
+            <blockquote style="margin: 0; font-size: 15px; line-height: 1.7">{{ q.text }}</blockquote>
+            <figcaption style="margin-top: 12px; font-size: 14px; color: #4A5A6E"><strong style="color: #D96C2C">— {{ q.who }}</strong>, {{ q.role }}</figcaption>
+          </div>
+        </figure>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<footer data-screen-label="Footer CTA" style="background: #14263B">
+  <div style="max-width: 1240px; margin: 0 auto; padding: 36px 32px; display: flex; align-items: center; justify-content: space-between; gap: 32px">
+    <div style="display: flex; align-items: center; gap: 14px">
+      <img src="assets/mark.png" alt="" style="height: 44px; width: auto">
+      <span style="color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 0.14em; line-height: 1.2">PHOENIX<br><span style="font-weight: 400; font-size: 13px; letter-spacing: 0.34em">OPERATIONS</span></span>
+    </div>
+    <p style="margin: 0; color: #E8EDF3; font-size: 16px; font-weight: 600; max-width: 400px; line-height: 1.5">Let's talk about what's keeping you up at night—and where to start.</p>
+    <a href="Funnel Landing.dc.html" style="display: inline-flex; align-items: center; gap: 12px; background: #D96C2C; color: #fff; padding: 18px 30px; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase" style-hover="background: #E8894E; color: #fff">Schedule a 15-Minute Conversation <span style="font-size: 18px">→</span></a>
+  </div>
+</footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  icon(paths, size) {
+    const s = size || 40;
+    return { __html: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>` };
+  }
+  renderVals() {
+    return {
+      pillars: [
+        { name: 'Built and led companies', blurb: 'Founder-side experience with the weight of payroll, people, and every decision landing on one desk.', icon: this.icon('<path d="M3 21 h18 M5 21 V7 l7-4 7 4 v14 M9 21 v-4 h6 v4"/><path d="M9 10 h.01 M12 10 h.01 M15 10 h.01 M9 13 h.01 M12 13 h.01 M15 13 h.01"/>') },
+        { name: 'Inside large organizations', blurb: 'Systems and discipline from big-company operations — translated to what actually fits a growing business.', icon: this.icon('<circle cx="12" cy="12" r="3"/><path d="M12 2 v3 M12 19 v3 M2 12 h3 M19 12 h3 M4.9 4.9 l2.1 2.1 M17 17 l2.1 2.1 M19.1 4.9 L17 7 M7 17 l-2.1 2.1"/>') },
+        { name: 'Hundreds of small businesses', blurb: 'Decades of coaching founders and leadership teams through the exact frustrations on this site.', icon: this.icon('<circle cx="9" cy="8" r="3"/><path d="M3.5 19 c0-3 2.5-5 5.5-5 s5.5 2 5.5 5"/><circle cx="16.5" cy="9" r="2.4"/><path d="M16 14.2 c2.8 0.2 4.5 2 4.5 4.4"/>') },
+      ],
+      quotes: [
+        { text: 'One of the things I also recognize is that coaches also need to be coached. And Josh has been a phenomenal coach for me and for my team.', who: 'Chris Crew', role: 'President, The Blue Collar Success Group' },
+        { text: "Joshua has a unique ability to simplify complex concepts, keep us focused on what matters most… Thanks to his support, we've gained clarity, accountability, and traction in ways we hadn't before.", who: 'Lincoln Higdon', role: 'CEO, Centerpoint IT' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

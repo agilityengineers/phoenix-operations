@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #E9E5DB; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; }
+</style>
+</helmet>
+<div style="padding: 40px 32px; display: flex; flex-direction: column; gap: 32px; align-items: center">
+<div style="text-align: center; max-width: 640px">
+  <h1 style="margin: 0; font-size: 28px; font-weight: 800">Mobile — funnel landing & intake</h1>
+  <p style="margin: 10px 0 0; font-size: 14px; color: #6A7686; line-height: 1.6">390px reference designs. Majority of funnel traffic will be mobile ad clicks — hit targets ≥44px, single-column, thumb-reach CTAs.</p>
+</div>
+<div style="display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; align-items: flex-start">
+  <sc-for list="{{ screens }}" as="sc" hint-placeholder-count="4">
+    <div>
+      <p style="margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2; text-align: center">{{ sc.label }}</p>
+      <div style="width: 390px; background: #F7F4EE; border-radius: 28px; border: 10px solid #14263B; overflow: hidden; box-shadow: 0 20px 48px rgba(20,38,59,0.2)">
+
+        <sc-if value="{{ sc.isLanding }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E5DFD2; background: rgba(247,244,238,0.94)">
+              <img src="assets/logo.png" alt="" style="height: 38px; mix-blend-mode: multiply">
+              <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #8A94A2">Free · No pitch</span>
+            </div>
+            <div style="padding: 28px 22px 8px">
+              <p style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #D96C2C">Lack of Control</p>
+              <h2 style="margin: 10px 0 0; font-size: 32px; line-height: 1.12; font-weight: 800">The business shouldn't run you.</h2>
+              <div style="width: 56px; height: 4px; background: #D96C2C; margin: 16px 0"></div>
+              <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: #3A4A5E">Every decision routes through you. Every fire finds you. You built this company to create freedom—and somewhere along the way, it started controlling you.</p>
+              <a href="#" style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 20px; background: #D96C2C; color: #fff; padding: 17px; border-radius: 8px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Start the conversation →</a>
+              <p style="margin: 10px 0 0; text-align: center; font-size: 12px; color: #8A94A2">Takes about 2 minutes · then pick a time</p>
+            </div>
+            <div style="margin: 20px 22px 26px; background: #fff; border: 1px solid #EDE7DA; border-radius: 12px; padding: 20px">
+              <p style="margin: 0; font-size: 14px; font-weight: 700">Sound familiar?</p>
+              <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px">
+                <sc-for list="{{ stakes }}" as="s">
+                  <div style="display: flex; gap: 10px; align-items: flex-start">
+                    <span style="flex: none; width: 20px; height: 20px; border-radius: 50%; background: #FBEFE4; color: #D96C2C; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800">✓</span>
+                    <span style="font-size: 13px; line-height: 1.55; color: #3A4A5E">{{ s }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sc.isIntake }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E5DFD2">
+              <img src="assets/logo.png" alt="" style="height: 34px; mix-blend-mode: multiply">
+              <span style="font-size: 11px; font-weight: 600; color: #8A94A2">Step 1 of 5</span>
+            </div>
+            <div style="height: 5px; background: #EFE9DC"><div style="height: 100%; width: 20%; background: #D96C2C"></div></div>
+            <div style="padding: 24px 22px 28px">
+              <h2 style="margin: 0; font-size: 21px; font-weight: 800">Let's start with what's happening</h2>
+              <p style="margin: 22px 0 10px; font-size: 15px; font-weight: 700">Where do you feel you have the least control?</p>
+              <p style="margin: 0 0 12px; font-size: 12px; color: #8A94A2">Pick all that apply.</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 9px">
+                <sc-for list="{{ chips }}" as="c">
+                  <span style="{{ c.css }}">{{ c.name }}</span>
+                </sc-for>
+              </div>
+              <p style="margin: 24px 0 12px; font-size: 15px; font-weight: 700">What happens when you step away?</p>
+              <div style="display: flex; flex-direction: column; gap: 9px">
+                <sc-for list="{{ radios }}" as="r">
+                  <span style="{{ r.css }}">{{ r.name }}</span>
+                </sc-for>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 26px">
+                <span style="font-size: 13px; font-weight: 600; color: #8A94A2">← Back</span>
+                <span style="background: #D96C2C; color: #fff; border-radius: 8px; padding: 15px 26px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Continue →</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sc.isSchedule }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="padding: 14px 20px; border-bottom: 1px solid #E5DFD2; text-align: center">
+              <img src="assets/logo.png" alt="" style="height: 34px; mix-blend-mode: multiply">
+            </div>
+            <div style="padding: 26px 22px 28px; text-align: center">
+              <span style="display: inline-flex; width: 52px; height: 52px; border-radius: 50%; background: #E8F3EA; color: #2E7D43; align-items: center; justify-content: center; font-size: 22px; font-weight: 800">✓</span>
+              <h2 style="margin: 14px 0 0; font-size: 22px; font-weight: 800">Thanks, Marcus. Pick a time.</h2>
+              <p style="margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: #6A7686">15 minutes · Eastern time · confirmation to your inbox</p>
+              <div style="display: flex; gap: 8px; margin-top: 18px; overflow-x: auto; padding-bottom: 4px">
+                <sc-for list="{{ days }}" as="d">
+                  <span style="{{ d.css }}">{{ d.name }}<br><strong style="font-size: 15px">{{ d.n }}</strong></span>
+                </sc-for>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px">
+                <sc-for list="{{ slots }}" as="s">
+                  <span style="{{ s.css }}">{{ s.name }}</span>
+                </sc-for>
+              </div>
+              <span style="display: block; margin-top: 20px; background: #D96C2C; color: #fff; border-radius: 8px; padding: 16px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Confirm 11:30 AM →</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ sc.isHome }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(247,244,238,0.94); border-bottom: 1px solid #E5DFD2">
+              <img src="assets/logo.png" alt="" style="height: 38px; mix-blend-mode: multiply">
+              <span style="display: flex; flex-direction: column; gap: 4px"><span style="width: 22px; height: 2.5px; background: #14263B"></span><span style="width: 22px; height: 2.5px; background: #14263B"></span><span style="width: 14px; height: 2.5px; background: #14263B"></span></span>
+            </div>
+            <div style="position: relative">
+              <img src="assets/hero-photo.png" alt="" style="width: 100%; height: 230px; object-fit: cover; display: block">
+              <div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(247,244,238,0) 30%, #F7F4EE 96%)"></div>
+            </div>
+            <div style="padding: 0 22px 26px; margin-top: -30px; position: relative">
+              <h2 style="margin: 0; font-size: 30px; line-height: 1.15; font-weight: 800">You're working harder. Shouldn't this be getting easier?</h2>
+              <div style="width: 56px; height: 4px; background: #D96C2C; margin: 14px 0"></div>
+              <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3A4A5E">Less control, more people problems, profits that don't reflect the effort — sound familiar?</p>
+              <p style="margin: 18px 0 10px; font-size: 14px; font-weight: 700">What's most frustrating right now?</p>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <sc-for list="{{ homeFrustrations }}" as="f">
+                  <span style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #E0DACB; background: #fff; border-radius: 10px; padding: 14px 16px; font-size: 14px; font-weight: 700">{{ f }} <span style="color: #D96C2C">→</span></span>
+                </sc-for>
+              </div>
+              <span style="display: block; margin-top: 18px; background: #D96C2C; color: #fff; border-radius: 8px; padding: 16px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Schedule a 15-min conversation</span>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </sc-for>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const chip = (active, extra) => `border: 1.5px solid ${active ? '#D96C2C' : '#D8D2C4'}; background: ${active ? '#FBEFE4' : '#FDFBF7'}; color: ${active ? '#B5541C' : '#14263B'}; border-radius: 8px; padding: 13px 16px; font-size: 13px; font-weight: 600; ${extra || ''}`;
+    return {
+      screens: [
+        { label: 'Homepage', isHome: true }, { label: 'Funnel landing', isLanding: true },
+        { label: 'Intake — step 1', isIntake: true }, { label: 'Scheduler', isSchedule: true },
+      ],
+      stakes: [
+        'You cancel time off because something always breaks while you\u2019re gone.',
+        'Decisions your team should own still land on your desk every day.',
+        'You\u2019ve delegated before — and quietly taken it all back.',
+      ],
+      homeFrustrations: ['Lack of Control', 'Lack of Profit', 'People', 'Hitting the Ceiling', 'Nothing Works'],
+      chips: [
+        { name: 'Scheduling & operations', css: chip(true) }, { name: 'Cash flow', css: chip(false) },
+        { name: 'Quality of work', css: chip(false) }, { name: 'My own calendar', css: chip(true) },
+        { name: 'Team accountability', css: chip(false) },
+      ],
+      radios: [
+        { name: 'Things run fine without me', css: chip(false, 'display: block;') },
+        { name: 'Small stuff slips, big stuff waits for me', css: chip(true, 'display: block;') },
+        { name: 'Fires start within days', css: chip(false, 'display: block;') },
+        { name: 'Honestly? I never fully step away', css: chip(false, 'display: block;') },
+      ],
+      days: ['Mon 7', 'Tue 8', 'Wed 9', 'Thu 10', 'Fri 11'].map((d, i) => {
+        const [name, n] = d.split(' ');
+        return { name, n, css: `flex: none; width: 60px; border: 1.5px solid ${i === 1 ? '#D96C2C' : '#E0DACB'}; background: ${i === 1 ? '#FBEFE4' : '#fff'}; color: ${i === 1 ? '#B5541C' : '#14263B'}; border-radius: 10px; padding: 10px 0; font-size: 11px; font-weight: 700; text-align: center;` };
+      }),
+      slots: ['9:15 AM', '11:30 AM', '2:00 PM', '4:15 PM'].map((s, i) => ({ name: s, css: chip(i === 1, 'text-align: center; padding: 14px;') })),
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #F7F4EE; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; }
+  a:hover { color: #B5541C; }
+  input, textarea { font-family: 'Poppins', sans-serif; }
+  input:focus, textarea:focus { outline: 2px solid #D96C2C; outline-offset: 1px; }
+</style>
+</helmet>
+<div style="min-width: 1000px">
+<header data-screen-label="Funnel Nav" style="background: rgba(247,244,238,0.94); border-bottom: 1px solid #E5DFD2">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between">
+    <a href="Phoenix Site.dc.html" style="display: flex"><img src="assets/logo.png" alt="Phoenix Operations" style="height: 60px; mix-blend-mode: multiply"></a>
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #8A94A2">Free 15-minute conversation · No pitch</span>
+  </div>
+</header>
+
+<sc-if value="{{ notSubmitted }}" hint-placeholder-val="{{ true }}">
+<section data-screen-label="Funnel Hero" style="max-width: 1140px; margin: 0 auto; padding: 80px 32px 64px; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 56px; align-items: center">
+  <div>
+    <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #D96C2C">For founders who feel it: Lack of Control</p>
+    <h1 style="margin: 16px 0 0; font-size: 54px; line-height: 1.1; font-weight: 800; letter-spacing: -0.01em">The business shouldn't run you.</h1>
+    <div style="width: 72px; height: 5px; background: #D96C2C; margin: 26px 0"></div>
+    <p style="margin: 0; font-size: 18px; line-height: 1.65; color: #3A4A5E; max-width: 560px; text-wrap: pretty">Every decision routes through you. Every fire finds you. You built this company to create freedom—and somewhere along the way, it started controlling you more than you control it.</p>
+    <div style="display: flex; align-items: center; gap: 18px; margin-top: 36px">
+      <a href="#intake" style="display: inline-flex; align-items: center; gap: 12px; background: #D96C2C; color: #fff; padding: 18px 30px; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase" style-hover="background: #C05A1C; color: #fff">Start the conversation <span style="font-size: 18px">→</span></a>
+      <span style="font-size: 14px; color: #6A7686">Takes about 2 minutes.<br>Then pick a time that works.</span>
+    </div>
+  </div>
+  <div style="background: #FFFFFF; border: 1px solid #EDE7DA; border-radius: 14px; padding: 36px">
+    <p style="margin: 0; font-size: 16px; font-weight: 700">Sound familiar?</p>
+    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 18px">
+      <sc-for list="{{ stakes }}" as="s" hint-placeholder-count="3">
+        <div style="display: flex; gap: 14px; align-items: flex-start">
+          <span style="flex: none; width: 22px; height: 22px; border-radius: 50%; background: #FBEFE4; color: #D96C2C; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">✓</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #3A4A5E">{{ s }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top: 24px; border-top: 1px solid #EDE7DA; padding-top: 20px; display: flex; gap: 16px; align-items: center">
+      <img src="assets/headshot.jpg" alt="Joshua" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: top">
+      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3A4A5E"><strong style="color: #14263B">I've sat in your seat.</strong> I know how to ask the questions that light the path—so you can see the obstacles clearly and decide what needs attention first.</p>
+    </div>
+  </div>
+</section>
+
+<section id="intake" data-screen-label="Intake" style="background: #FFFFFF; border-top: 1px solid #EDE7DA">
+  <div style="max-width: 760px; margin: 0 auto; padding: 72px 32px 96px">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px">
+      <h2 style="margin: 0; font-size: 30px; font-weight: 800">{{ stepTitle }}</h2>
+      <span style="font-size: 13px; font-weight: 600; color: #8A94A2; white-space: nowrap">Step {{ stepNum }} of 5</span>
+    </div>
+    <div style="height: 6px; background: #EFE9DC; border-radius: 3px; margin: 18px 0 8px; overflow: hidden">
+      <div style="height: 100%; background: #D96C2C; border-radius: 3px; transition: width 0.3s; width: {{ progressPct }}"></div>
+    </div>
+    <sc-if value="{{ resumed }}" hint-placeholder-val="{{ false }}">
+      <p style="margin: 6px 0 0; font-size: 13px; color: #8A94A2">Welcome back — we saved your answers so you can pick up where you left off.</p>
+    </sc-if>
+
+    <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 32px; margin-top: 36px">
+        <div>
+          <p style="margin: 0 0 12px; font-size: 17px; font-weight: 700">Where do you feel you have the least control in the business?</p>
+          <p style="margin: 0 0 14px; font-size: 13px; color: #8A94A2">Pick all that apply.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <sc-for list="{{ controlOpts }}" as="o" hint-placeholder-count="5">
+              <button onClick="{{ toggleChip }}" data-field="leastControl" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <p style="margin: 0 0 12px; font-size: 17px; font-weight: 700">What keeps coming back to you that should be handled by someone else?</p>
+          <textarea name="bounceback" onChange="{{ onInput }}" defaultValue="{{ a.bounceback }}" rows="3" placeholder="e.g. Every pricing call, every hiring decision, every unhappy customer…" style="width: 100%; box-sizing: border-box; border: 1px solid #D8D2C4; border-radius: 8px; padding: 14px 16px; font-size: 15px; resize: vertical; background: #FDFBF7"></textarea>
+        </div>
+        <div>
+          <p style="margin: 0 0 14px; font-size: 17px; font-weight: 700">What happens when you step away?</p>
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <sc-for list="{{ stepAwayOpts }}" as="o" hint-placeholder-count="4">
+              <button onClick="{{ pick }}" data-field="stepAway" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 32px; margin-top: 36px">
+        <div>
+          <p style="margin: 0 0 14px; font-size: 17px; font-weight: 700">What industry are you in?</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <sc-for list="{{ industryOpts }}" as="o" hint-placeholder-count="6">
+              <button onClick="{{ pick }}" data-field="industry" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px">
+          <div>
+            <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Annual revenue</p>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <sc-for list="{{ revenueOpts }}" as="o" hint-placeholder-count="5">
+                <button onClick="{{ pick }}" data-field="revenue" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Team size</p>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <sc-for list="{{ employeeOpts }}" as="o" hint-placeholder-count="5">
+                <button onClick="{{ pick }}" data-field="employees" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Active clients / customers</p>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <sc-for list="{{ clientOpts }}" as="o" hint-placeholder-count="4">
+                <button onClick="{{ pick }}" data-field="clients" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Years in business</p>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <sc-for list="{{ yearsOpts }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ pick }}" data-field="years" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 28px; margin-top: 36px">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
+          <label style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700">Your name *
+            <input name="name" onChange="{{ onInput }}" defaultValue="{{ a.name }}" placeholder="First and last name" style="border: 1px solid #D8D2C4; border-radius: 8px; padding: 13px 15px; font-size: 15px; background: #FDFBF7; font-weight: 400">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700">Work email *
+            <input name="email" type="email" onChange="{{ onInput }}" defaultValue="{{ a.email }}" placeholder="you@company.com" style="border: 1px solid #D8D2C4; border-radius: 8px; padding: 13px 15px; font-size: 15px; background: #FDFBF7; font-weight: 400">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700">Company
+            <input name="company" onChange="{{ onInput }}" defaultValue="{{ a.company }}" placeholder="Company name" style="border: 1px solid #D8D2C4; border-radius: 8px; padding: 13px 15px; font-size: 15px; background: #FDFBF7; font-weight: 400">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700">Phone
+            <input name="phone" onChange="{{ onInput }}" defaultValue="{{ a.phone }}" placeholder="(555) 000-0000" style="border: 1px solid #D8D2C4; border-radius: 8px; padding: 13px 15px; font-size: 15px; background: #FDFBF7; font-weight: 400">
+          </label>
+        </div>
+        <div>
+          <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Your role</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <sc-for list="{{ roleOpts }}" as="o" hint-placeholder-count="5">
+              <button onClick="{{ pick }}" data-field="role" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <sc-if value="{{ showOwnerJoin }}" hint-placeholder-val="{{ false }}">
+          <div style="background: #FBF4E9; border: 1px solid #EDDCC0; border-radius: 10px; padding: 20px 24px">
+            <p style="margin: 0 0 12px; font-size: 15px; font-weight: 700">Since you're not the owner — will the owner join the conversation?</p>
+            <div style="display: flex; gap: 10px">
+              <sc-for list="{{ ownerJoinOpts }}" as="o" hint-placeholder-count="3">
+                <button onClick="{{ pick }}" data-field="ownerJoin" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <div>
+          <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">Do you work with a coach or peer group today?</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <sc-for list="{{ coachOpts }}" as="o" hint-placeholder-count="4">
+              <button onClick="{{ pick }}" data-field="coachHistory" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <p style="margin: 0 0 14px; font-size: 16px; font-weight: 700">How soon do you want to make a change?</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <sc-for list="{{ urgencyOpts }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ pick }}" data-field="urgency" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 13px; color: #B04A3A; min-height: 18px">{{ validationMsg }}</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep4 }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 32px; margin-top: 36px">
+        <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #4A5A6E">Honest answers make the conversation useful. There are no wrong answers here.</p>
+        <sc-for list="{{ likerts }}" as="L" hint-placeholder-count="2">
+          <div>
+            <p style="margin: 0 0 14px; font-size: 17px; font-weight: 700">{{ L.q }}</p>
+            <div style="display: flex; gap: 8px">
+              <sc-for list="{{ L.opts }}" as="o">
+                <button onClick="{{ pick }}" data-field="{{ L.field }}" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              </sc-for>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #8A94A2; max-width: 320px"><span>Strongly disagree</span><span>Strongly agree</span></div>
+          </div>
+        </sc-for>
+        <div>
+          <p style="margin: 0 0 12px; font-size: 17px; font-weight: 700">What have you already tried?</p>
+          <textarea name="tried" onChange="{{ onInput }}" defaultValue="{{ a.tried }}" rows="3" placeholder="New hires, software, delegating, consultants…" style="width: 100%; box-sizing: border-box; border: 1px solid #D8D2C4; border-radius: 8px; padding: 14px 16px; font-size: 15px; resize: vertical; background: #FDFBF7"></textarea>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isStep5 }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top: 36px">
+        <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.6; color: #4A5A6E">Here's what you've shared. If it looks right, submit and pick a time for your 15-minute conversation.</p>
+        <div style="display: flex; flex-direction: column; border: 1px solid #EDE7DA; border-radius: 12px; overflow: hidden">
+          <sc-for list="{{ reviewRows }}" as="r" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 200px 1fr; gap: 16px; padding: 14px 22px; border-top: 1px solid #F1ECE0; background: #FDFBF7">
+              <span style="font-size: 13px; font-weight: 700; color: #8A94A2; text-transform: uppercase; letter-spacing: 0.06em">{{ r.k }}</span>
+              <span style="font-size: 15px">{{ r.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 44px">
+      <button onClick="{{ back }}" style="{{ backCss }}">← Back</button>
+      <button onClick="{{ next }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 16px 30px; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer" style-hover="background: #C05A1C">{{ nextLabel }}</button>
+    </div>
+  </div>
+</section>
+</sc-if>
+
+<sc-if value="{{ submitted }}" hint-placeholder-val="{{ false }}">
+<section data-screen-label="Scheduler" style="max-width: 900px; margin: 0 auto; padding: 72px 32px 96px">
+  <div style="text-align: center">
+    <span style="display: inline-flex; width: 64px; height: 64px; border-radius: 50%; background: #E8F3EA; color: #2E7D43; align-items: center; justify-content: center; font-size: 28px; font-weight: 800">✓</span>
+    <h1 style="margin: 22px 0 0; font-size: 38px; font-weight: 800">Thanks, {{ firstName }}. Last step: pick a time.</h1>
+    <p style="margin: 14px auto 0; max-width: 520px; font-size: 16px; line-height: 1.6; color: #3A4A5E">15 minutes. No prep, no pressure. A confirmation and calendar invite will land in your inbox.</p>
+  </div>
+  <sc-if value="{{ notBooked }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top: 44px; background: #FFFFFF; border: 1px solid #EDE7DA; border-radius: 14px; padding: 36px">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <p style="margin: 0; font-size: 16px; font-weight: 700">Week of September 7</p>
+        <span style="font-size: 13px; color: #8A94A2">All times Eastern · 15 min</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-top: 22px">
+        <sc-for list="{{ days }}" as="d" hint-placeholder-count="5">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="text-align: center; font-size: 13px; font-weight: 700; color: #4A5A6E; padding-bottom: 6px; border-bottom: 2px solid #EFE9DC">{{ d.label }}</div>
+            <sc-for list="{{ d.slots }}" as="s">
+              <button onClick="{{ book }}" data-day="{{ d.label }}" data-time="{{ s }}" style="border: 1px solid #D8D2C4; background: #FDFBF7; color: #14263B; border-radius: 6px; padding: 10px 6px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer" style-hover="border-color: #D96C2C; color: #D96C2C; background: #FFF">{{ s }}</button>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ booked }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-top: 44px; background: #14263B; border-radius: 14px; padding: 44px; text-align: center; color: #fff">
+      <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #E8894E">You're booked</p>
+      <p style="margin: 14px 0 0; font-size: 28px; font-weight: 800">{{ bookedSlot }} Eastern</p>
+      <p style="margin: 12px auto 0; max-width: 440px; font-size: 15px; line-height: 1.6; color: #B8C4D4">Confirmation sent to {{ a.email }}. Come ready to talk about the issue creating the most frustration right now — nothing else to prepare.</p>
+      <a href="Phoenix Site.dc.html" style="display: inline-block; margin-top: 24px; color: #E8894E; font-size: 14px; font-weight: 700" style-hover="color: #fff">← Back to the site</a>
+    </div>
+  </sc-if>
+  <p style="margin: 28px 0 0; text-align: center; font-size: 13px; color: #8A94A2">This is a conversation, not a sales pitch. If I can help, great. If I can't, I'll tell you.</p>
+</section>
+</sc-if>
+
+<footer style="background: #14263B">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 20px 32px; display: flex; justify-content: space-between; align-items: center">
+    <span style="color: #7E8DA1; font-size: 13px">© 2026 Phoenix Operations. All rights reserved.</span>
+    <a href="Admin.dc.html" style="color: #7E8DA1; font-size: 13px" style-hover="color: #fff">Admin</a>
+  </div>
+</footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('po-intake-lack-of-control') || 'null'); } catch (e) {}
+    this.state = {
+      step: saved?.step ?? 1,
+      a: saved?.a ?? { leastControl: [] },
+      resumed: !!saved && !saved.submitted,
+      submitted: saved?.submitted ?? false,
+      bookedSlot: saved?.bookedSlot ?? null,
+      validationMsg: '',
+    };
+  }
+  persist() {
+    try { localStorage.setItem('po-intake-lack-of-control', JSON.stringify({ step: this.state.step, a: this.state.a, submitted: this.state.submitted, bookedSlot: this.state.bookedSlot })); } catch (e) {}
+  }
+  chipCss(active, extra) {
+    return `border: 1.5px solid ${active ? '#D96C2C' : '#D8D2C4'}; background: ${active ? '#FBEFE4' : '#FDFBF7'}; color: ${active ? '#B5541C' : '#14263B'}; border-radius: 8px; padding: 11px 18px; font-family: Poppins, sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; ${extra || ''}`;
+  }
+  opts(field, values, extra) {
+    return values.map(v => ({ value: v, css: this.chipCss(this.state.a[field] === v, extra) }));
+  }
+  score() {
+    const a = this.state.a;
+    let s = 0;
+    if (['$1M–$3M', '$3M–$10M', '$10M+'].includes(a.revenue)) s += 15; else if (a.revenue === '$500K–$1M') s += 8;
+    if (['11–25', '26–50', '50+'].includes(a.employees)) s += 10; else if (a.employees === '4–10') s += 6;
+    if (['Trades / home services', 'Construction', 'Professional services', 'Manufacturing'].includes(a.industry)) s += 8;
+    if (['3–10 years', '10+ years'].includes(a.years)) s += 7;
+    if (a.role === 'Owner / Founder') s += 20; else if (a.role === 'CEO / President') s += 16; else if (a.ownerJoin === 'Yes') s += 10; else s += 2;
+    const lik = v => ({ '1': 0, '2': 2, '3': 4, '4': 6, '5': 8 })[v] ?? 0;
+    s += lik(a.coachAdmit) + lik(a.coachOpen);
+    if ((a.tried || '').length > 20) s += 4;
+    if ((a.leastControl || []).length >= 2) s += 3;
+    if (a.coachHistory === 'Yes, currently' || a.coachHistory === 'Have in the past') s += 2;
+    if (a.urgency === 'Now — this quarter') s += 15; else if (a.urgency === 'In the next 6 months') s += 9; else if (a.urgency === 'Just exploring') s += 3;
+    return Math.min(100, s);
+  }
+  renderVals() {
+    const st = this.state, a = st.a, step = st.step;
+    const titles = { 1: "Let's start with what's happening", 2: 'A bit about the business', 3: 'How to reach you', 4: 'Two honest questions', 5: 'Review and submit' };
+    const chips = a.leastControl || [];
+    const likertOpts = f => ['1', '2', '3', '4', '5'].map(v => ({ value: v, css: this.chipCss(a[f] === v, 'width: 56px; text-align: center;') }));
+    const rv = [
+      ['Least control', chips.join(', ')], ['Keeps coming back', a.bounceback], ['When you step away', a.stepAway],
+      ['Industry', a.industry], ['Revenue', a.revenue], ['Team size', a.employees], ['Clients', a.clients], ['Years in business', a.years],
+      ['Name', a.name], ['Email', a.email], ['Company', a.company], ['Phone', a.phone], ['Role', a.role],
+      ['Owner joining call', a.ownerJoin], ['Coach / peer group', a.coachHistory], ['Urgency', a.urgency],
+      ['Already tried', a.tried],
+    ].filter(r => r[1]).map(r => ({ k: r[0], v: r[1] }));
+    return {
+      notSubmitted: !st.submitted, submitted: st.submitted,
+      resumed: st.resumed && step > 1,
+      stepNum: String(step), stepTitle: titles[step], progressPct: (step * 20) + '%',
+      isStep1: step === 1, isStep2: step === 2, isStep3: step === 3, isStep4: step === 4, isStep5: step === 5,
+      a, validationMsg: st.validationMsg,
+      stakes: [
+        'You cancel time off because something always breaks while you\u2019re gone.',
+        'Decisions your team should own still land on your desk every day.',
+        'You\u2019ve delegated before — and quietly taken it all back.',
+      ],
+      controlOpts: chips && this.controlValues().map(v => ({ value: v, css: this.chipCss(chips.includes(v)) })),
+      stepAwayOpts: this.opts('stepAway', ['Things run fine without me', 'Small stuff slips, big stuff waits for me', 'Fires start within days', 'Honestly? I never fully step away'], 'width: 100%;'),
+      industryOpts: this.opts('industry', ['Trades / home services', 'Construction', 'Professional services', 'Manufacturing', 'Retail / e-commerce', 'Other']),
+      revenueOpts: this.opts('revenue', ['Under $500K', '$500K–$1M', '$1M–$3M', '$3M–$10M', '$10M+']),
+      employeeOpts: this.opts('employees', ['1–3', '4–10', '11–25', '26–50', '50+']),
+      clientOpts: this.opts('clients', ['Under 25', '25–100', '100–500', '500+']),
+      yearsOpts: this.opts('years', ['Under 3 years', '3–10 years', '10+ years']),
+      roleOpts: this.opts('role', ['Owner / Founder', 'CEO / President', 'COO / Operations', 'Other leadership', 'Other']),
+      showOwnerJoin: !!a.role && a.role !== 'Owner / Founder' && a.role !== 'CEO / President',
+      ownerJoinOpts: this.opts('ownerJoin', ['Yes', 'Maybe', 'No']),
+      coachOpts: this.opts('coachHistory', ['Yes, currently', 'Have in the past', 'No, never', 'In a peer group']),
+      urgencyOpts: this.opts('urgency', ['Now — this quarter', 'In the next 6 months', 'Just exploring']),
+      likerts: [
+        { field: 'coachAdmit', q: 'I can admit that some of what\u2019s holding the business back needs help from outside my own head.', opts: likertOpts('coachAdmit') },
+        { field: 'coachOpen', q: 'I\u2019m open to being challenged on how I lead and how the business runs.', opts: likertOpts('coachOpen') },
+      ],
+      reviewRows: rv,
+      toggleChip: (e) => {
+        const v = e.currentTarget.dataset.value;
+        this.setState(s => {
+          const cur = s.a.leastControl || [];
+          const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
+          return { a: { ...s.a, leastControl: next }, validationMsg: '' };
+        }, () => this.persist());
+      },
+      pick: (e) => {
+        const f = e.currentTarget.dataset.field, v = e.currentTarget.dataset.value;
+        this.setState(s => ({ a: { ...s.a, [f]: v }, validationMsg: '' }), () => this.persist());
+      },
+      onInput: (e) => {
+        const f = e.target.name, v = e.target.value;
+        this.setState(s => ({ a: { ...s.a, [f]: v }, validationMsg: '' }), () => this.persist());
+      },
+      back: () => { if (step > 1) this.setState({ step: step - 1 }, () => this.persist()); },
+      backCss: `border: none; background: none; color: ${step > 1 ? '#4A5A6E' : 'transparent'}; font-family: Poppins, sans-serif; font-size: 14px; font-weight: 600; cursor: ${step > 1 ? 'pointer' : 'default'}; padding: 16px 0;`,
+      next: () => {
+        if (step === 3 && (!(a.name || '').trim() || !/.+@.+\..+/.test(a.email || ''))) {
+          this.setState({ validationMsg: 'Name and a valid work email are required to continue.' });
+          return;
+        }
+        if (step < 5) this.setState({ step: step + 1, resumed: false }, () => this.persist());
+        else {
+          const payload = { funnel: 'lack-of-control', score: this.score(), answers: a, utm: Object.fromEntries(new URLSearchParams(location.search)), submittedAt: new Date().toISOString() };
+          try {
+            const leads = JSON.parse(localStorage.getItem('po-leads') || '[]');
+            leads.push(payload);
+            localStorage.setItem('po-leads', JSON.stringify(leads));
+          } catch (e) {}
+          this.setState({ submitted: true }, () => this.persist());
+        }
+      },
+      nextLabel: step === 5 ? 'Submit & pick a time' : 'Continue →',
+      firstName: (a.name || 'there').split(' ')[0],
+      notBooked: !st.bookedSlot, booked: !!st.bookedSlot, bookedSlot: st.bookedSlot || '',
+      days: ['Mon 9/7', 'Tue 9/8', 'Wed 9/9', 'Thu 9/10', 'Fri 9/11'].map(label => ({ label, slots: ['9:15 AM', '11:30 AM', '2:00 PM', '4:15 PM'] })),
+      book: (e) => {
+        const slot = e.currentTarget.dataset.day + ' · ' + e.currentTarget.dataset.time;
+        this.setState({ bookedSlot: slot }, () => this.persist());
+      },
+    };
+  }
+  controlValues() {
+    return ['Scheduling & operations', 'Cash flow & finances', 'Quality of work', 'My own calendar', 'Team accountability'];
+  }
+}
+</script>
+</body>
+</html>

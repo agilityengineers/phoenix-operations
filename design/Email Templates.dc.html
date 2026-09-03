@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #E9E5DB; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; } a:hover { color: #B5541C; }
+</style>
+</helmet>
+<div style="padding: 40px 32px; display: flex; flex-direction: column; gap: 40px; align-items: center">
+<div style="text-align: center; max-width: 640px">
+  <h1 style="margin: 0; font-size: 28px; font-weight: 800">Transactional email templates</h1>
+  <p style="margin: 10px 0 0; font-size: 14px; color: #6A7686; line-height: 1.6">SendGrid designs — table-safe layouts, system-safe fallbacks (Arial), 600px max width. Brand assets and guide identity render per workspace (white-label).</p>
+</div>
+<div style="display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; justify-content: center">
+
+  <div>
+    <p style="margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2; text-align: center">1 · Intake confirmation → prospect</p>
+    <div style="width: 600px; background: #F7F4EE; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,38,59,0.12)">
+      <div style="padding: 28px 40px; text-align: center; border-bottom: 1px solid #EDE7DA">
+        <img src="assets/logo.png" alt="Phoenix Operations" style="height: 52px; mix-blend-mode: multiply">
+      </div>
+      <div style="padding: 36px 40px">
+        <h2 style="margin: 0; font-size: 24px; font-weight: 800">You're booked, {{ firstName }}.</h2>
+        <p style="margin: 14px 0 0; font-size: 15px; line-height: 1.7; color: #3A4A5E">Thanks for sharing what's going on in your business. Your 15-minute conversation is confirmed:</p>
+        <div style="margin-top: 20px; background: #fff; border: 1px solid #EDE7DA; border-radius: 10px; padding: 22px 26px; display: flex; gap: 18px; align-items: center">
+          <span style="width: 46px; height: 46px; border-radius: 10px; background: #FBEFE4; color: #D96C2C; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; flex: none">📅</span>
+          <div>
+            <div style="font-size: 16px; font-weight: 800">Tuesday, September 8 · 11:30 AM Eastern</div>
+            <div style="font-size: 13px; color: #6A7686; margin-top: 3px">15 minutes · video link included in the calendar invite</div>
+          </div>
+        </div>
+        <p style="margin: 20px 0 0; font-size: 15px; line-height: 1.7; color: #3A4A5E"><strong>Nothing to prepare.</strong> Come ready to talk about the issue creating the most frustration right now. This is a conversation, not a sales pitch — if we can help, great. If we can't, we'll tell you.</p>
+        <div style="margin-top: 24px; text-align: center">
+          <span style="display: inline-block; background: #D96C2C; color: #fff; border-radius: 6px; padding: 15px 30px; font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Add to calendar</span>
+        </div>
+        <p style="margin: 22px 0 0; font-size: 13px; color: #8A94A2; text-align: center">Need to reschedule? <span style="color: #D96C2C; font-weight: 700">Pick a new time</span></p>
+      </div>
+      <div style="background: #14263B; padding: 20px 40px; text-align: center">
+        <span style="color: #9FAEC2; font-size: 12px">Phoenix Operations · You received this because you scheduled a conversation at phoenixoperations.com<br><span style="color: #7E8DA1">Unsubscribe · Privacy</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2; text-align: center">2 · New-lead notification → owner</p>
+    <div style="width: 600px; background: #F7F4EE; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,38,59,0.12)">
+      <div style="background: #14263B; padding: 22px 40px; display: flex; justify-content: space-between; align-items: center">
+        <span style="color: #fff; font-size: 15px; font-weight: 800">🔥 New qualified lead</span>
+        <span style="background: #E8F3EA; color: #2E7D43; font-size: 13px; font-weight: 800; border-radius: 20px; padding: 6px 14px">Score 88</span>
+      </div>
+      <div style="padding: 32px 40px">
+        <h2 style="margin: 0; font-size: 22px; font-weight: 800">Marcus Webb — Webb Mechanical</h2>
+        <p style="margin: 6px 0 0; font-size: 13px; color: #8A94A2">Lack of Control funnel · variant A · google / cpc · founders-q3</p>
+        <div style="margin-top: 18px; background: #fff; border: 1px solid #EDE7DA; border-radius: 10px; padding: 20px 24px">
+          <sc-for list="{{ leadRows }}" as="r" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 7px 0; font-size: 13px">
+              <span style="color: #8A94A2; font-weight: 600">{{ r.k }}</span><span style="font-weight: 600">{{ r.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top: 16px; background: #FBF4E9; border: 1px solid #EDDCC0; border-radius: 10px; padding: 16px 20px">
+          <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #B5541C">In their words</div>
+          <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.6; font-style: italic; color: #3A4A5E">"Every pricing call, every hiring decision, every unhappy customer still comes to me."</p>
+        </div>
+        <div style="margin-top: 22px; display: flex; gap: 12px; justify-content: center">
+          <span style="display: inline-block; background: #D96C2C; color: #fff; border-radius: 6px; padding: 13px 24px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Open in CRM</span>
+          <span style="display: inline-block; border: 2px solid #14263B; color: #14263B; border-radius: 6px; padding: 11px 24px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">View booking</span>
+        </div>
+      </div>
+      <div style="border-top: 1px solid #EDE7DA; padding: 16px 40px; text-align: center">
+        <span style="color: #8A94A2; font-size: 12px">Internal notification · Phoenix Operations CRM · manage notification rules in Settings</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p style="margin: 0 0 12px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #8A94A2; text-align: center">3 · Call reminder → prospect (24h before)</p>
+    <div style="width: 600px; background: #F7F4EE; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,38,59,0.12)">
+      <div style="padding: 28px 40px; text-align: center; border-bottom: 1px solid #EDE7DA">
+        <img src="assets/logo.png" alt="Phoenix Operations" style="height: 52px; mix-blend-mode: multiply">
+      </div>
+      <div style="padding: 32px 40px; text-align: center">
+        <h2 style="margin: 0; font-size: 22px; font-weight: 800">Tomorrow: your 15-minute conversation</h2>
+        <p style="margin: 12px 0 0; font-size: 15px; color: #3A4A5E">Tuesday, September 8 · 11:30 AM Eastern</p>
+        <p style="margin: 16px auto 0; max-width: 420px; font-size: 14px; line-height: 1.7; color: #6A7686">One useful thing to think about beforehand: of everything happening in the business right now, what's the one thing you'd fix first if you could?</p>
+        <div style="margin-top: 22px; display: flex; gap: 12px; justify-content: center">
+          <span style="display: inline-block; background: #D96C2C; color: #fff; border-radius: 6px; padding: 13px 24px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Join the call</span>
+          <span style="display: inline-block; border: 2px solid #E0DACB; color: #6A7686; border-radius: 6px; padding: 11px 24px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase">Reschedule</span>
+        </div>
+      </div>
+      <div style="background: #14263B; padding: 18px 40px; text-align: center">
+        <span style="color: #9FAEC2; font-size: 12px">Phoenix Operations · Unsubscribe · Privacy</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      firstName: 'Marcus',
+      leadRows: [
+        { k: 'Email', v: 'marcus@webbmech.com' }, { k: 'Phone', v: '(555) 212-8804' },
+        { k: 'Role', v: 'Owner / Founder' }, { k: 'Industry', v: 'Trades / home services' },
+        { k: 'Revenue', v: '$3M–$10M' }, { k: 'Team', v: '26–50' },
+        { k: 'Urgency', v: 'Now — this quarter' }, { k: 'Coachability', v: '4/5 and 5/5' },
+        { k: 'Booked', v: 'Tue Sep 8 · 11:30 AM ET' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #F7F4EE; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; }
+  a:hover { color: #B5541C; }
+</style>
+</helmet>
+<div style="min-width: 1100px">
+<header data-screen-label="Nav" style="background: rgba(247,244,238,0.94); border-bottom: 1px solid #E5DFD2">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between">
+    <img src="assets/logo.png" alt="Phoenix Operations" style="height: 56px; mix-blend-mode: multiply">
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #8A94A2">Private link · Shared by Phoenix Operations</span>
+  </div>
+</header>
+
+<section data-screen-label="Results Hero" style="max-width: 900px; margin: 0 auto; padding: 72px 32px 56px; text-align: center">
+  <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #D96C2C">What Results Look Like</p>
+  <h1 style="margin: 14px 0 0; font-size: 50px; line-height: 1.12; font-weight: 800">The results come from running on a real operating system.</h1>
+  <div style="width: 72px; height: 5px; background: #D96C2C; margin: 26px auto"></div>
+  <p style="margin: 0 auto; max-width: 640px; font-size: 17px; line-height: 1.7; color: #3A4A5E; text-wrap: pretty">Phoenix Operations coaches companies on EOS® — the Entrepreneurial Operating System. It isn't magic, and it isn't theory. It's a set of simple, proven tools installed into how your leadership team runs the business, week after week. The numbers below are what disciplined execution produces.</p>
+</section>
+
+<section data-screen-label="Headline Metrics" style="background: #14263B">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 64px 32px">
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0">
+      <sc-for list="{{ bigStats }}" as="s" hint-placeholder-count="3">
+        <div style="text-align: center; padding: 8px 36px; border-left: 1px solid rgba(255,255,255,0.14)">
+          <div style="font-size: 54px; font-weight: 800; color: #E8894E; line-height: 1">{{ s.n }}</div>
+          <div style="margin-top: 12px; font-size: 15px; font-weight: 700; color: #fff">{{ s.label }}</div>
+          <div style="margin-top: 8px; font-size: 13px; line-height: 1.6; color: #9FAEC2">{{ s.sub }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin: 36px 0 0; text-align: center; font-size: 12px; color: #7E8DA1">Sources: TrueSpace/Gallup-validated five-year study of 305 companies; EOS Worldwide adoption reporting.</p>
+  </div>
+</section>
+
+<section data-screen-label="Where Results Come From" style="background: #FFFFFF; border-top: 1px solid #EDE7DA">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 80px 32px">
+    <h2 style="margin: 0; text-align: center; font-size: 38px; font-weight: 800">Where the results actually come from</h2>
+    <p style="margin: 14px auto 0; max-width: 620px; text-align: center; font-size: 16px; line-height: 1.65; color: #3A4A5E">EOS strengthens six key components of your business. Each one removes a specific drag on growth — the same frustrations that likely brought you here.</p>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 52px">
+      <sc-for list="{{ components }}" as="c" hint-placeholder-count="6">
+        <div style="background: #F7F4EE; border: 1px solid #EDE7DA; border-radius: 12px; padding: 28px">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="width: 38px; height: 38px; border-radius: 50%; background: #D96C2C; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; flex: none">{{ c.n }}</span>
+            <span style="font-size: 18px; font-weight: 800">{{ c.name }}</span>
+          </div>
+          <p style="margin: 14px 0 0; font-size: 14px; line-height: 1.65; color: #4A5A6E">{{ c.what }}</p>
+          <div style="margin-top: 14px; border-top: 1px solid #E5DFD2; padding-top: 12px; font-size: 13px; line-height: 1.6"><strong style="color: #D96C2C">The result:</strong> <span style="color: #14263B; font-weight: 600">{{ c.result }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section data-screen-label="What Changes" style="background: #F7F4EE">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 80px 32px">
+    <h2 style="margin: 0; text-align: center; font-size: 38px; font-weight: 800">What owners typically see, and when</h2>
+    <p style="margin: 14px auto 0; max-width: 560px; text-align: center; font-size: 16px; color: #3A4A5E">A realistic arc. Every company moves at its own pace — this is the pattern.</p>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 52px">
+      <sc-for list="{{ phases }}" as="p" hint-placeholder-count="3">
+        <div style="background: #FFFFFF; border: 1px solid #EDE7DA; border-radius: 12px; padding: 30px; display: flex; flex-direction: column; gap: 14px">
+          <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #D96C2C">{{ p.when }}</div>
+          <div style="font-size: 19px; font-weight: 800">{{ p.title }}</div>
+          <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{ p.items }}" as="i">
+              <li style="font-size: 14px; line-height: 1.6; color: #3A4A5E">{{ i }}</li>
+            </sc-for>
+          </ul>
+        </div>
+      </sc-for>
+    </div>
+    <p style="margin: 36px auto 0; max-width: 680px; text-align: center; font-size: 14px; line-height: 1.7; color: #6A7686">An honest caveat: EOS produces these results when the leadership team actually runs the system — shows up to the meetings, keeps the scorecard, and holds each other accountable. That discipline is exactly what Phoenix Operations coaches.</p>
+  </div>
+</section>
+
+<section data-screen-label="Client Proof" style="background: #FFFFFF; border-top: 1px solid #EDE7DA">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 80px 32px">
+    <h2 style="margin: 0; text-align: center; font-size: 38px; font-weight: 800">Proof from companies we've coached</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px">
+      <sc-for list="{{ quotes }}" as="q" hint-placeholder-count="4">
+        <figure style="margin: 0; background: #F7F4EE; border: 1px solid #EDE7DA; border-radius: 12px; padding: 30px; display: flex; gap: 18px">
+          <span style="font-size: 44px; line-height: 0.8; color: #D96C2C; font-weight: 800">&ldquo;</span>
+          <div>
+            <blockquote style="margin: 0; font-size: 15px; line-height: 1.7">{{ q.text }}</blockquote>
+            <figcaption style="margin-top: 12px; font-size: 13.5px; color: #4A5A6E"><strong style="color: #14263B">— {{ q.who }}</strong>, {{ q.role }}</figcaption>
+          </div>
+        </figure>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<footer data-screen-label="Footer CTA" style="background: #14263B">
+  <div style="max-width: 1140px; margin: 0 auto; padding: 40px 32px; display: flex; align-items: center; justify-content: space-between; gap: 32px">
+    <div style="display: flex; align-items: center; gap: 14px">
+      <img src="assets/mark.png" alt="" style="height: 40px; width: auto">
+      <span style="color: #fff; font-size: 18px; font-weight: 800; letter-spacing: 0.14em; line-height: 1.2">PHOENIX<br><span style="font-weight: 400; font-size: 12px; letter-spacing: 0.34em">OPERATIONS</span></span>
+    </div>
+    <p style="margin: 0; color: #B8C4D4; font-size: 14px; max-width: 380px; line-height: 1.6">Want to know what these tools would change in your business? That's a 15-minute conversation.</p>
+    <a href="Funnel Landing.dc.html" style="display: inline-flex; align-items: center; gap: 12px; background: #D96C2C; color: #fff; padding: 18px 30px; border-radius: 6px; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase" style-hover="background: #E8894E; color: #fff">Schedule a Conversation <span style="font-size: 18px">→</span></a>
+  </div>
+  <div style="border-top: 1px solid rgba(255,255,255,0.12)">
+    <div style="max-width: 1140px; margin: 0 auto; padding: 14px 32px; display: flex; justify-content: space-between">
+      <span style="color: #7E8DA1; font-size: 12px">© 2026 Phoenix Operations. EOS® and the Entrepreneurial Operating System® are registered trademarks of EOS Worldwide.</span>
+    </div>
+  </div>
+</footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      bigStats: [
+        { n: '2.8×', label: 'Faster growth with a professional implementer', sub: 'Gallup-validated, propensity-matched study of 305 companies over five years (TrueSpace).' },
+        { n: '100K+', label: 'Companies have adopted EOS tools', sub: 'Across trades, services, manufacturing, and more — almost all founder-led, growth-stage businesses.' },
+        { n: '6', label: 'Key components strengthened', sub: 'Vision, People, Data, Issues, Process, Traction — the whole business, not one symptom.' },
+      ],
+      components: [
+        { n: 'V', name: 'Vision', what: 'Everyone on your leadership team answers the same eight questions the same way — where you\u2019re going and how you\u2019ll get there.', result: 'No more side quests. Decisions get easier because direction is clear.' },
+        { n: 'P', name: 'People', what: 'Right people in the right seats, defined by an Accountability Chart — who owns what, with no overlap and no gaps.', result: 'The people frustrations stop recycling. Owners stop being the safety net.' },
+        { n: 'D', name: 'Data', what: 'A weekly scorecard of 5-15 numbers that give you an absolute pulse on the business — no waiting for month-end.', result: 'You manage from facts, not feelings. Problems surface weeks earlier.' },
+        { n: 'I', name: 'Issues', what: 'A discipline for surfacing problems and solving them at the root: Identify, Discuss, Solve.', result: 'Issues get solved once instead of discussed forever.' },
+        { n: 'Pr', name: 'Process', what: 'Your core processes documented, simplified, and followed by all — the "franchise-ready" way your business runs.', result: 'Consistency and quality stop depending on who did the work.' },
+        { n: 'T', name: 'Traction', what: '90-day Rocks and a weekly Level 10 Meeting™ pulse that turns the vision into execution.', result: 'The plan actually happens. Accountability without micromanaging.' },
+      ],
+      phases: [
+        { when: 'Days 1–90', title: 'Clarity and traction', items: ['Accountability Chart in place — every seat owned', 'First Rocks set; the priorities fight ends', 'Weekly Level 10 Meetings running — shorter, useful meetings', 'Scorecard live: a real pulse on the business'] },
+        { when: 'Months 3–12', title: 'Momentum', items: ['Issues list shrinking instead of recycling', 'Leadership team healthier and more open', 'Owner delegating with confidence — and it sticks', 'Numbers trending: on-time delivery, margin, close rate'] },
+        { when: 'Year 1–2+', title: 'Freedom', items: ['Business runs on the system, not the owner', 'Predictable quarters: plan, execute, review, repeat', 'Profit reflects the effort — pricing, focus, discipline', 'The company grows without growing your hours'] },
+      ],
+      quotes: [
+        { text: 'We have scorecards in place for all departments of our entire organization. Everybody understands the role they play and what they need to do to help the company win. Our team feels more fulfilled, and we\u2019re getting better results.', who: 'Chris Crew', role: 'President, The Blue Collar Success Group' },
+        { text: 'I\u2019ve watched our leadership team really step up levels of leadership — the way they\u2019re communicating better, the way our communication flows, the way we track, measure, and improve things continues to get better.', who: 'Kenny Chapman', role: 'Founder and CEO, The Blue Collar Success Group' },
+        { text: 'When they\u2019re facilitating our quarterly meetings, we get more done and stay focused on what matters.', who: 'Danielle Putnam', role: 'CEO, The New Flat Rate' },
+        { text: 'We\u2019ve gained clarity, accountability, and traction in ways we hadn\u2019t before.', who: 'Lincoln Higdon', role: 'CEO, Centerpoint IT' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

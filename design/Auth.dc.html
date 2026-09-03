@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; font-family: 'Poppins', sans-serif; background: #F3F1EB; color: #14263B; }
+  a { color: #D96C2C; text-decoration: none; } a:hover { color: #B5541C; }
+  input { font-family: 'Poppins', sans-serif; }
+  input:focus { outline: 2px solid #D96C2C; outline-offset: 1px; }
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column">
+<header style="padding: 20px 32px; display: flex; justify-content: space-between; align-items: center">
+  <img src="assets/logo.png" alt="Phoenix Operations" style="height: 54px; mix-blend-mode: multiply">
+  <div style="display: flex; gap: 8px; background: #fff; border: 1px solid #E7E2D6; border-radius: 8px; padding: 4px">
+    <sc-for list="{{ tabs }}" as="t">
+      <button onClick="{{ pickTab }}" data-id="{{ t.id }}" style="{{ t.css }}">{{ t.label }}</button>
+    </sc-for>
+  </div>
+</header>
+<main style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+  <div style="width: 420px; background: #fff; border: 1px solid #E7E2D6; border-radius: 14px; padding: 40px">
+    <img src="assets/mark.png" alt="" style="height: 40px">
+    <h1 style="margin: 18px 0 0; font-size: 26px; font-weight: 800">Sign in to your workspace</h1>
+    <p style="margin: 8px 0 0; font-size: 14px; color: #6A7686">Funnels, pipeline, and everything in between.</p>
+    <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 26px">
+      <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Work email
+        <input type="email" placeholder="you@company.com" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+      </label>
+      <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Password
+        <input type="password" placeholder="••••••••" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+      </label>
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px">
+        <label style="display: flex; align-items: center; gap: 8px; color: #4A5A6E"><input type="checkbox" defaultChecked="{{ true }}" style="accent-color: #D96C2C"> Remember me</label>
+        <button onClick="{{ goReset }}" style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0">Forgot password?</button>
+      </div>
+      <a href="Admin.dc.html" style="display: block; text-align: center; background: #D96C2C; color: #fff; border-radius: 6px; padding: 15px; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase" style-hover="background: #C05A1C; color: #fff">Sign in</a>
+      <div style="display: flex; align-items: center; gap: 12px; color: #B4AC98; font-size: 12px"><span style="flex: 1; height: 1px; background: #EDE7DA"></span>or<span style="flex: 1; height: 1px; background: #EDE7DA"></span></div>
+      <button style="border: 1.5px solid #E7E2D6; background: #fff; color: #14263B; border-radius: 6px; padding: 13px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px" style-hover="border-color: #14263B"><span style="font-weight: 800; color: #4285F4">G</span> Continue with Google</button>
+    </div>
+    <p style="margin: 22px 0 0; text-align: center; font-size: 13px; color: #6A7686">New partner? <button onClick="{{ goSignup }}" style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0">Create your workspace</button></p>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isReset }}" hint-placeholder-val="{{ false }}">
+  <div style="width: 420px; background: #fff; border: 1px solid #E7E2D6; border-radius: 14px; padding: 40px">
+    <img src="assets/mark.png" alt="" style="height: 40px">
+    <h1 style="margin: 18px 0 0; font-size: 26px; font-weight: 800">Reset your password</h1>
+    <p style="margin: 8px 0 0; font-size: 14px; color: #6A7686; line-height: 1.6">Enter your email and we'll send a reset link. It expires in 30 minutes.</p>
+    <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 26px">
+      <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Work email
+        <input type="email" placeholder="you@company.com" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+      </label>
+      <button onClick="{{ sendReset }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 15px; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer" style-hover="background: #C05A1C">Send reset link</button>
+      <sc-if value="{{ resetSent }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #E8F3EA; color: #2E7D43; border-radius: 8px; padding: 13px 16px; font-size: 13px; font-weight: 600">✓ If that email has an account, a reset link is on its way.</div>
+      </sc-if>
+    </div>
+    <p style="margin: 22px 0 0; text-align: center; font-size: 13px"><button onClick="{{ goLogin }}" style="border: none; background: none; color: #D96C2C; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0">← Back to sign in</button></p>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isSignup }}" hint-placeholder-val="{{ false }}">
+  <div style="width: 780px; background: #fff; border: 1px solid #E7E2D6; border-radius: 14px; padding: 40px">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start">
+      <div>
+        <h1 style="margin: 0; font-size: 26px; font-weight: 800">Create your partner workspace</h1>
+        <p style="margin: 8px 0 0; font-size: 14px; color: #6A7686">Your own white-labeled funnels, CRM, and guide page — connected to the Phoenix Operations network.</p>
+      </div>
+      <span style="font-size: 12px; font-weight: 700; color: #8A94A2; white-space: nowrap">Step {{ signupStep }} of 3</span>
+    </div>
+    <div style="height: 5px; background: #EFE9DC; border-radius: 3px; margin: 20px 0 26px; overflow: hidden"><div style="height: 100%; background: #D96C2C; transition: width 0.3s; width: {{ signupPct }}"></div></div>
+    <sc-if value="{{ isSignup1 }}" hint-placeholder-val="{{ true }}">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+        <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Your name
+          <input placeholder="First and last name" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+        </label>
+        <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Work email
+          <input type="email" placeholder="you@yourfirm.com" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+        </label>
+        <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Password
+          <input type="password" placeholder="8+ characters" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+        </label>
+        <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Invite code <span style="font-weight: 400; color: #8A94A2">(from your Phoenix Operations contact)</span>
+          <input placeholder="e.g. PHX-4F7K" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+        </label>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isSignup2 }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 18px">
+        <div>
+          <p style="margin: 0 0 12px; font-size: 14px; font-weight: 700">What kind of practice do you run?</p>
+          <div style="display: flex; gap: 10px">
+            <sc-for list="{{ typeOpts }}" as="o">
+              <button onClick="{{ pickType }}" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Practice / brand name
+            <input placeholder="e.g. Summit Operations" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+          </label>
+          <label style="font-size: 13px; font-weight: 700; display: flex; flex-direction: column; gap: 6px">Preferred subdomain
+            <input placeholder="summit → summit.phoenixops.app" style="border: 1px solid #E0DACB; border-radius: 8px; padding: 13px 15px; font-size: 14px; font-weight: 400; background: #FDFBF7">
+          </label>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #8A94A2">You can connect a custom domain and upload your logo after setup — everything client-facing is white-labeled.</p>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isSignup3 }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <p style="margin: 0; font-size: 14px; font-weight: 700">Pick your plan</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px">
+          <sc-for list="{{ plans }}" as="p">
+            <button onClick="{{ pickPlan }}" data-value="{{ p.name }}" style="{{ p.css }}">
+              <span style="display: block; font-size: 15px; font-weight: 800">{{ p.name }}</span>
+              <span style="display: block; font-size: 24px; font-weight: 800; margin-top: 8px">{{ p.price }}<span style="font-size: 12px; font-weight: 600; color: #8A94A2">/mo</span></span>
+              <span style="display: block; font-size: 12px; color: #6A7686; margin-top: 8px; line-height: 1.6">{{ p.blurb }}</span>
+            </button>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #8A94A2">14-day free trial on every plan. Card collected at checkout via Stripe — cancel anytime.</p>
+      </div>
+    </sc-if>
+    <div style="display: flex; justify-content: space-between; margin-top: 28px">
+      <button onClick="{{ signupBack }}" style="{{ signupBackCss }}">← Back</button>
+      <button onClick="{{ signupNext }}" style="background: #D96C2C; color: #fff; border: none; border-radius: 6px; padding: 14px 26px; font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer" style-hover="background: #C05A1C">{{ signupNextLabel }}</button>
+    </div>
+    <sc-if value="{{ signupDone }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top: 18px; background: #E8F3EA; color: #2E7D43; border-radius: 8px; padding: 14px 18px; font-size: 13px; font-weight: 600">✓ Workspace created — check your email to verify, then you'll land in onboarding (logo, guide profile, first funnel).</div>
+    </sc-if>
+  </div>
+</sc-if>
+
+</main>
+<footer style="padding: 18px 32px; display: flex; justify-content: space-between; font-size: 12px; color: #8A94A2">
+  <span>© 2026 Phoenix Operations</span>
+  <div style="display: flex; gap: 18px"><a href="Legal.dc.html" style="color: #8A94A2" style-hover="color: #14263B">Privacy</a><a href="Legal.dc.html" style="color: #8A94A2" style-hover="color: #14263B">Terms</a></div>
+</footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { tab: 'login', resetSent: false, signupStep: 1, ptype: 'EOS Implementer', plan: 'Practice', signupDone: false };
+  chip(active, extra) {
+    return `border: 1.5px solid ${active ? '#D96C2C' : '#D8D2C4'}; background: ${active ? '#FBEFE4' : '#FDFBF7'}; color: ${active ? '#B5541C' : '#14263B'}; border-radius: 8px; padding: 12px 18px; font-family: Poppins, sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; ${extra || ''}`;
+  }
+  renderVals() {
+    const st = this.state;
+    return {
+      tabs: [
+        { id: 'login', label: 'Sign in' }, { id: 'signup', label: 'Partner signup' }, { id: 'reset', label: 'Reset' },
+      ].map(t => ({ ...t, css: `border: none; border-radius: 6px; padding: 9px 16px; font-family: Poppins, sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; background: ${st.tab === t.id ? '#14263B' : 'none'}; color: ${st.tab === t.id ? '#fff' : '#6A7686'};` })),
+      pickTab: (e) => this.setState({ tab: e.currentTarget.dataset.id }),
+      isLogin: st.tab === 'login', isReset: st.tab === 'reset', isSignup: st.tab === 'signup',
+      goReset: () => this.setState({ tab: 'reset' }),
+      goLogin: () => this.setState({ tab: 'login' }),
+      goSignup: () => this.setState({ tab: 'signup' }),
+      sendReset: () => this.setState({ resetSent: true }),
+      resetSent: st.resetSent,
+      signupStep: String(st.signupStep), signupPct: (st.signupStep * 33.4) + '%',
+      isSignup1: st.signupStep === 1, isSignup2: st.signupStep === 2, isSignup3: st.signupStep === 3,
+      typeOpts: ['EOS Implementer', 'Operations Consultant', 'Business Coach', 'Other professional'].map(v => ({ value: v, css: this.chip(st.ptype === v) })),
+      pickType: (e) => this.setState({ ptype: e.currentTarget.dataset.value }),
+      plans: [
+        { name: 'Solo', price: '$79', blurb: '1 user · 2 funnels · CRM · Zapier' },
+        { name: 'Practice', price: '$179', blurb: '5 users · unlimited funnels · HubSpot sync · custom domain' },
+        { name: 'Network', price: '$399', blurb: 'Unlimited users · multi-workspace · partner rollup analytics' },
+      ].map(p => ({ ...p, css: `text-align: left; border: 2px solid ${st.plan === p.name ? '#D96C2C' : '#E7E2D6'}; background: ${st.plan === p.name ? '#FBEFE4' : '#fff'}; border-radius: 12px; padding: 18px; font-family: Poppins, sans-serif; cursor: pointer; color: #14263B;` })),
+      pickPlan: (e) => this.setState({ plan: e.currentTarget.dataset.value }),
+      signupBack: () => { if (st.signupStep > 1) this.setState({ signupStep: st.signupStep - 1, signupDone: false }); },
+      signupBackCss: `border: none; background: none; color: ${st.signupStep > 1 ? '#4A5A6E' : 'transparent'}; font-family: Poppins, sans-serif; font-size: 13px; font-weight: 600; cursor: ${st.signupStep > 1 ? 'pointer' : 'default'}; padding: 14px 0;`,
+      signupNext: () => { if (st.signupStep < 3) this.setState({ signupStep: st.signupStep + 1 }); else this.setState({ signupDone: true }); },
+      signupNextLabel: st.signupStep === 3 ? 'Start free trial' : 'Continue →',
+      signupDone: st.signupDone,
+    };
+  }
+}
+</script>
+</body>
+</html>
