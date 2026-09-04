@@ -1,0 +1,1 @@
+- [Deployment host routing](deployment-host-routing.md) — Replit-attached custom domains are platform hosts; resolve them from REPLIT_DOMAINS before tenant-subdomain logic.

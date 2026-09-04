@@ -20,8 +20,9 @@ export const publicWorkspaceSlug = () => {
     host.endsWith(".repl.co") ||
     host.endsWith(".replitusercontent.com");
   if (platformHost) return valid(remembered) ? remembered : "phoenix";
-  const label = host.split(".")[0];
-  return host.split(".").length > 2 && valid(label) ? label : valid(remembered) ? remembered : "phoenix";
+  // Arbitrary/custom hosts are resolved authoritatively by the API. Do not
+  // mistake the first DNS label for a workspace slug and override host routing.
+  return "phoenix";
 };
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   if (path.startsWith("/public/") || path.startsWith("/intake/")) {

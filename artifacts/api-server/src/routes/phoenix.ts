@@ -42,10 +42,16 @@ const customHost = (value: unknown) => {
   const publicSuffixOnly = /^(com|org|net|edu|gov|io|co|app|dev|co\.uk)$/.test(normalized);
   return !reserved && !publicSuffixOnly && normalized !== "localhost" && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(normalized) ? normalized : null;
 };
+const deploymentHosts = new Set(
+  (process.env.REPLIT_DOMAINS ?? "")
+    .split(",")
+    .map(value => value.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0].split(":")[0])
+    .filter(Boolean),
+);
 const publicWorkspace = async (req: Request) => {
   const host = (req.get("host") ?? "").split(":")[0].toLowerCase();
   if (host) { const [custom] = await db.select().from(phoenixWorkspaces).where(and(eq(phoenixWorkspaces.customDomain, host), eq(phoenixWorkspaces.isPublic, true))).limit(1); if (custom) return custom; }
-  const platformHost = host === "localhost" || host === "127.0.0.1" || host.endsWith(".replit.dev") || host.endsWith(".replit.app") || host.endsWith(".repl.co") || host.endsWith(".replitusercontent.com");
+  const platformHost = deploymentHosts.has(host) || host === "localhost" || host === "127.0.0.1" || host.endsWith(".replit.dev") || host.endsWith(".replit.app") || host.endsWith(".repl.co") || host.endsWith(".replitusercontent.com");
   const hostSlug = !platformHost && host.split(".").length > 2 ? slug(host.split(".")[0]) : null;
   const requested = slug(req.query.workspace) ?? hostSlug ?? "phoenix";
   if (!requested) return null;
