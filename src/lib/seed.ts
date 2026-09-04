@@ -40,7 +40,7 @@ export const seedWorkspace: Workspace = {
     name: "Joshua Kornitsky",
     title: "Founder, Phoenix Operations",
     story:
-      "I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses. I've seen what happens when growth starts creating more complexity than the people and processes were built to handle.",
+      "I've built companies, led teams, worked inside Fortune 500 companies, and spent decades working with hundreds of small businesses. I've seen what happens when growth starts creating more complexity than the people and processes were built to handle.",
     showGuideBand: true,
   },
 };

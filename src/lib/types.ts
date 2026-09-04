@@ -105,7 +105,7 @@ export interface Funnel {
 export interface IntakeAnswers {
   leastControl?: string[];
   bounceback?: string;
-  stepAway?: string;
+  stepAway?: string[];
   industry?: string;
   revenue?: string;
   employees?: string;

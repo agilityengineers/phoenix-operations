@@ -118,7 +118,12 @@ const faqs = [
 
 const testimonials = [
   {
-    text: "They've always made themselves available, and I found that when they're facilitating our quarterly meetings, we get more done and stay focused on what matters.",
+    text: "He's always made himself available, and I found that when he's facilitating our quarterly meetings and working with our staff, he's very truthful and effective in accomplishing what we've gathered to meet about.",
+    who: "Frank Broniec",
+    role: "CEO, Broniec Associates",
+  },
+  {
+    text: "I've got a huge thank you to Josh for showing us the way and sticking with us through it. There was a lot of uncomfortable conversations that he got to be a part of because we had a lot of baggage to let go of.",
     who: "Danielle Putnam",
     role: "CEO, The New Flat Rate",
   },
@@ -126,11 +131,6 @@ const testimonials = [
     text: "I've watched our leadership team really step up levels of leadership — the way they're communicating better, the way our communication flows, the way we track, measure, and improve things continues to get better.",
     who: "Kenny Chapman",
     role: "Founder and CEO, The Blue Collar Success Group",
-  },
-  {
-    text: "We have scorecards in place for all departments of our entire organization. Everybody understands the role they play and what they need to do to help the company win. Our team feels more fulfilled, and we're getting better results.",
-    who: "Chris Crew",
-    role: "President, The Blue Collar Success Group",
   },
 ];
 
@@ -285,8 +285,8 @@ export default async function HomePage() {
               <h2>Guided by someone who&apos;s sat in your seat.</h2>
               <p>
                 Decades of building companies, leading teams, and working with hundreds of small
-                businesses — asking the questions that light the path so you can decide what needs
-                attention first.
+                businesses — asking the questions that get you above the weeds so you can decide
+                what needs attention first.
               </p>
             </div>
             <Link href="/guide" className="btn-ink-outline">

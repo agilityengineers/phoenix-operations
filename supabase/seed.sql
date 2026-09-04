@@ -8,7 +8,7 @@
 insert into workspaces (id, name, domain, type, status, plan, brand, guide, created_at) values
 ('ws_phoenix', 'Phoenix Operations', 'phoenixoperations.com', 'eos_implementer', 'live', 'network',
  '{"logoUrl":"/assets/logo.png","markUrl":"/assets/mark.png","primaryColor":"#D76C2C","inkColor":"#14263B","paperColor":"#F7F4EE","customDomain":"phoenixoperations.com"}',
- '{"photoUrl":"/assets/headshot.jpg","name":"Joshua Kornitsky","title":"Founder, Phoenix Operations","story":"I''ve built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses. I''ve seen what happens when growth starts creating more complexity than the people and processes were built to handle.","showGuideBand":true}',
+ '{"photoUrl":"/assets/headshot.jpg","name":"Joshua Kornitsky","title":"Founder, Phoenix Operations","story":"I''ve built companies, led teams, worked inside Fortune 500 companies, and spent decades working with hundreds of small businesses. I''ve seen what happens when growth starts creating more complexity than the people and processes were built to handle.","showGuideBand":true}',
  '2026-01-05T00:00:00Z'),
 ('ws_bluecollar', 'Blue Collar Ops', 'ops.bluecollarsuccess.com', 'eos_implementer', 'live', 'practice',
  '{"logoUrl":"/assets/logo.png","markUrl":"/assets/mark.png","primaryColor":"#D76C2C","inkColor":"#14263B","paperColor":"#F7F4EE"}',
