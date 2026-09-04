@@ -112,9 +112,9 @@ const quotes = [
     role: "Founder and CEO, The Blue Collar Success Group",
   },
   {
-    text: "When they’re facilitating our quarterly meetings, we get more done and stay focused on what matters.",
-    who: "Danielle Putnam",
-    role: "CEO, The New Flat Rate",
+    text: "He’s always made himself available, and I found that when he’s facilitating our quarterly meetings and working with our staff, he’s very truthful and effective in accomplishing what we’ve gathered to meet about.",
+    who: "Frank Broniec",
+    role: "CEO, Broniec Associates",
   },
   {
     text: "We’ve gained clarity, accountability, and traction in ways we hadn’t before.",

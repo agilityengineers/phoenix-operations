@@ -23,9 +23,9 @@ const pillars = [
     icon: <BuildingIcon />,
   },
   {
-    name: "Inside large organizations",
+    name: "Inside Fortune 500 companies",
     blurb:
-      "Systems and discipline from big-company operations — translated to what actually fits a growing business.",
+      "Systems and discipline from Fortune 500 operations — translated to what actually fits a growing business.",
     icon: <GearIcon />,
   },
   {
@@ -91,8 +91,8 @@ export default async function GuidePage() {
             <p className="guide-story">{guide.story}</p>
             <p className="guide-bold">
               You are the leading expert in your business, not me. But I know how to ask the
-              questions that help light the path—so you can see the obstacles more clearly and
-              decide what needs attention first.
+              questions that get you above the weeds—so you can see the obstacles more clearly
+              and decide what needs attention first.
             </p>
             <Link href="/f/lack-of-control" className="btn-primary">
               Schedule a 15-Minute Conversation <span className="arrow">→</span>

@@ -51,7 +51,7 @@
     </div>
     <div style="margin-top: 24px; border-top: 1px solid #EDE7DA; padding-top: 20px; display: flex; gap: 16px; align-items: center">
       <img src="assets/headshot.jpg" alt="Joshua" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: top">
-      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3A4A5E"><strong style="color: #14263B">I've sat in your seat.</strong> I know how to ask the questions that light the path—so you can see the obstacles clearly and decide what needs attention first.</p>
+      <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #3A4A5E"><strong style="color: #14263B">I've sat in your seat.</strong> I know how to ask the questions that get you above the weeds—so you can see the obstacles clearly and decide what needs attention first.</p>
     </div>
   </div>
 </section>
@@ -85,10 +85,11 @@
           <textarea name="bounceback" onChange="{{ onInput }}" defaultValue="{{ a.bounceback }}" rows="3" placeholder="e.g. Every pricing call, every hiring decision, every unhappy customer…" style="width: 100%; box-sizing: border-box; border: 1px solid #D8D2C4; border-radius: 8px; padding: 14px 16px; font-size: 15px; resize: vertical; background: #FDFBF7"></textarea>
         </div>
         <div>
-          <p style="margin: 0 0 14px; font-size: 17px; font-weight: 700">What happens when you step away?</p>
+          <p style="margin: 0 0 12px; font-size: 17px; font-weight: 700">What happens when you step away?</p>
+          <p style="margin: 0 0 14px; font-size: 13px; color: #8A94A2">Pick all that apply.</p>
           <div style="display: flex; flex-direction: column; gap: 10px">
             <sc-for list="{{ stepAwayOpts }}" as="o" hint-placeholder-count="4">
-              <button onClick="{{ pick }}" data-field="stepAway" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
+              <button onClick="{{ toggleChip }}" data-field="stepAway" data-value="{{ o.value }}" style="{{ o.css }}">{{ o.value }}</button>
             </sc-for>
           </div>
         </div>
@@ -293,7 +294,7 @@ class Component extends DCLogic {
     try { saved = JSON.parse(localStorage.getItem('po-intake-lack-of-control') || 'null'); } catch (e) {}
     this.state = {
       step: saved?.step ?? 1,
-      a: saved?.a ?? { leastControl: [] },
+      a: { leastControl: [], stepAway: [], ...(saved?.a || {}) },
       resumed: !!saved && !saved.submitted,
       submitted: saved?.submitted ?? false,
       bookedSlot: saved?.bookedSlot ?? null,
@@ -308,6 +309,10 @@ class Component extends DCLogic {
   }
   opts(field, values, extra) {
     return values.map(v => ({ value: v, css: this.chipCss(this.state.a[field] === v, extra) }));
+  }
+  multiOpts(field, values, extra) {
+    const cur = this.state.a[field] || [];
+    return values.map(v => ({ value: v, css: this.chipCss(cur.includes(v), extra) }));
   }
   score() {
     const a = this.state.a;
@@ -331,7 +336,7 @@ class Component extends DCLogic {
     const chips = a.leastControl || [];
     const likertOpts = f => ['1', '2', '3', '4', '5'].map(v => ({ value: v, css: this.chipCss(a[f] === v, 'width: 56px; text-align: center;') }));
     const rv = [
-      ['Least control', chips.join(', ')], ['Keeps coming back', a.bounceback], ['When you step away', a.stepAway],
+      ['Least control', chips.join(', ')], ['Keeps coming back', a.bounceback], ['When you step away', (a.stepAway || []).join(', ')],
       ['Industry', a.industry], ['Revenue', a.revenue], ['Team size', a.employees], ['Clients', a.clients], ['Years in business', a.years],
       ['Name', a.name], ['Email', a.email], ['Company', a.company], ['Phone', a.phone], ['Role', a.role],
       ['Owner joining call', a.ownerJoin], ['Coach / peer group', a.coachHistory], ['Urgency', a.urgency],
@@ -349,7 +354,7 @@ class Component extends DCLogic {
         'You\u2019ve delegated before — and quietly taken it all back.',
       ],
       controlOpts: chips && this.controlValues().map(v => ({ value: v, css: this.chipCss(chips.includes(v)) })),
-      stepAwayOpts: this.opts('stepAway', ['Things run fine without me', 'Small stuff slips, big stuff waits for me', 'Fires start within days', 'Honestly? I never fully step away'], 'width: 100%;'),
+      stepAwayOpts: this.multiOpts('stepAway', ['Things run fine without me', 'Small stuff slips, big stuff waits for me', 'Fires start within days', 'Honestly? I never fully step away'], 'width: 100%;'),
       industryOpts: this.opts('industry', ['Trades / home services', 'Construction', 'Professional services', 'Manufacturing', 'Retail / e-commerce', 'Other']),
       revenueOpts: this.opts('revenue', ['Under $500K', '$500K–$1M', '$1M–$3M', '$3M–$10M', '$10M+']),
       employeeOpts: this.opts('employees', ['1–3', '4–10', '11–25', '26–50', '50+']),
@@ -366,11 +371,11 @@ class Component extends DCLogic {
       ],
       reviewRows: rv,
       toggleChip: (e) => {
-        const v = e.currentTarget.dataset.value;
+        const f = e.currentTarget.dataset.field, v = e.currentTarget.dataset.value;
         this.setState(s => {
-          const cur = s.a.leastControl || [];
+          const cur = s.a[f] || [];
           const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
-          return { a: { ...s.a, leastControl: next }, validationMsg: '' };
+          return { a: { ...s.a, [f]: next }, validationMsg: '' };
         }, () => this.persist());
       },
       pick: (e) => {

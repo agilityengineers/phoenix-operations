@@ -71,6 +71,22 @@ function makeToken() {
   return `tok_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
+// Step 1's two pick-lists are both multi-select.
+type MultiField = "leastControl" | "stepAway";
+const MULTI_FIELDS: MultiField[] = ["leastControl", "stepAway"];
+
+// Saved progress may predate stepAway becoming multi-select — widen any single
+// stored string back into a list so a returning visitor keeps their answer.
+function normalizeAnswers(saved: IntakeAnswers | undefined): IntakeAnswers {
+  const a: IntakeAnswers = { leastControl: [], ...saved };
+  for (const f of MULTI_FIELDS) {
+    const v: unknown = a[f];
+    if (typeof v === "string") a[f] = v ? [v] : [];
+    else if (!Array.isArray(v)) a[f] = [];
+  }
+  return a;
+}
+
 type Props = {
   funnel: Funnel;
   variant: FunnelVariant;
@@ -120,7 +136,7 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
       contactIdRef.current = saved.contactId;
       utmRef.current = { ...(saved.utm ?? {}), ...utm };
       setStep(saved.step ?? 1);
-      setA(saved.a ?? { leastControl: [] });
+      setA(normalizeAnswers(saved.a));
       setSubmitted(saved.submitted ?? false);
       setBookedSlot(saved.bookedSlot ?? null);
       setResumed(!saved.submitted && (saved.step ?? 1) > 1);
@@ -185,13 +201,13 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
     [persist]
   );
 
-  const toggleControl = useCallback(
-    (value: string) => {
+  const toggleAnswer = useCallback(
+    (field: MultiField, value: string) => {
       setValidationMsg("");
       setA((prev) => {
-        const cur = prev.leastControl ?? [];
+        const cur = prev[field] ?? [];
         const nextList = cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value];
-        const next = { ...prev, leastControl: nextList };
+        const next = { ...prev, [field]: nextList };
         persist({ a: next });
         return next;
       });
@@ -279,7 +295,7 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
     const rows: Array<[string, string | undefined]> = [
       ["Least control", (a.leastControl ?? []).join(", ") || undefined],
       ["Keeps coming back", a.bounceback],
-      ["When you step away", a.stepAway],
+      ["When you step away", (a.stepAway ?? []).join(", ") || undefined],
       ["Industry", a.industry],
       ["Revenue", a.revenue],
       ["Team size", a.employees],
@@ -354,8 +370,8 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
                   <Image src={guide.photoUrl} alt={guide.name} width={56} height={56} />
                   <p>
                     <strong>I&apos;ve sat in your seat.</strong> I know how to ask the questions that
-                    light the path—so you can see the obstacles clearly and decide what needs
-                    attention first.
+                    get you above the weeds—so you can see the obstacles clearly and decide what
+                    needs attention first.
                   </p>
                 </div>
               </div>
@@ -404,7 +420,7 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
                             key={o}
                             type="button"
                             className={chip((a.leastControl ?? []).includes(o))}
-                            onClick={() => toggleControl(o)}
+                            onClick={() => toggleAnswer("leastControl", o)}
                           >
                             {o}
                           </button>
@@ -424,13 +440,14 @@ export default function IntakeExperience({ funnel, variant, guide }: Props) {
                     </div>
                     <div>
                       <p className="q-label">What happens when you step away?</p>
+                      <p className="q-hint">Pick all that apply.</p>
                       <div className="chip-col">
                         {STEP_AWAY_OPTS.map((o) => (
                           <button
                             key={o}
                             type="button"
-                            className={chip(a.stepAway === o)}
-                            onClick={() => setAnswer("stepAway", o)}
+                            className={chip((a.stepAway ?? []).includes(o))}
+                            onClick={() => toggleAnswer("stepAway", o)}
                           >
                             {o}
                           </button>
