@@ -77,7 +77,7 @@ export function intakeConfirmationEmail(opts: {
       siteUrl,
       logoHeader(brand, siteUrl),
       body,
-      inkFooter(brand, siteUrl, "Phoenix Operations · You received this because you scheduled a conversation at phoenixoperations.com")
+      inkFooter(brand, siteUrl, "Phoenix Operations · You received this because you scheduled a conversation at phoenix-operations.com")
     ),
   };
 }

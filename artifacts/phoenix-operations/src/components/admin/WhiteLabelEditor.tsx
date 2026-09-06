@@ -11,6 +11,7 @@ export default function WhiteLabelEditor({ initial }: { initial: Workspace }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [domain, setDomain] = useState(ws.brand.customDomain ?? "");
+  const [savedDomain, setSavedDomain] = useState(ws.brand.customDomain ?? "");
   const [domainStatus, setDomainStatus] = useState<{ state: string; domain?: string; txtName?: string; txtValue?: string } | null>(null);
   const [domainMessage, setDomainMessage] = useState("");
   useEffect(() => { void apiRequest<typeof domainStatus>("/workspace/domain-status").then(setDomainStatus); }, []);
@@ -28,13 +29,18 @@ export default function WhiteLabelEditor({ initial }: { initial: Workspace }) {
   const save = async () => {
     setSaving(true);
     try {
+      const nextDomain = domain.trim();
+      const domainChanged = nextDomain !== savedDomain.trim();
       const result = await apiRequest<{ workspace: Workspace; domain?: NonNullable<typeof domainStatus> }>("/workspace", { method: "PATCH", body: JSON.stringify({
         domain: ws.domain,
         brand: ws.brand,
         guide: ws.guide,
-        customDomain: domain.trim() || null,
+        // Only send it when it actually changed — sending it at all re-triggers
+        // DNS verification and clears the verified state.
+        ...(domainChanged ? { customDomain: nextDomain || null } : {}),
       }) });
       setWs(result.workspace);
+      if (domainChanged) setSavedDomain(nextDomain);
       if (result.domain) setDomainStatus(result.domain);
       setSavedAt(new Date().toLocaleTimeString());
     } finally {
@@ -91,6 +97,19 @@ export default function WhiteLabelEditor({ initial }: { initial: Workspace }) {
               </div>
             </div>
             <label className="adm-field">
+              Site domain
+              <input
+                className="adm-input"
+                value={ws.domain}
+                onChange={(e) => setWs(w => ({ ...w, domain: e.target.value }))}
+                placeholder="phoenix-operations.com"
+              />
+            </label>
+            <div className="adm-subtle" style={{ fontSize: 12, marginTop: -6 }}>
+              How this workspace refers to itself in the admin and in emails. Changing it does not
+              move any traffic.
+            </div>
+            <label className="adm-field">
               Custom domain
               <input
                 className="adm-input"
@@ -98,6 +117,10 @@ export default function WhiteLabelEditor({ initial }: { initial: Workspace }) {
                 onChange={(e) => setDomain(e.target.value)}
               />
             </label>
+            <div className="adm-subtle" style={{ fontSize: 12, marginTop: -6 }}>
+              The domain that actually serves this workspace. Editing it requires DNS
+              verification again.
+            </div>
             {domainStatus?.state === "pending" && <div className="adm-subtle">Pending DNS verification. Create TXT <strong>{domainStatus.txtName}</strong> with exact value <strong>{domainStatus.txtValue}</strong>, then <button type="button" className="adm-btn-outline sm" onClick={verifyDomain}>Verify DNS now</button></div>}
             {domainStatus?.state === "verified" && <div className="adm-subtle">Verified: {domainStatus.domain}</div>}
             {domainMessage && <div className="adm-subtle">{domainMessage}</div>}

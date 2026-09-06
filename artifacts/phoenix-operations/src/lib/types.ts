@@ -23,6 +23,22 @@ export interface GuideProfile {
   showGuideBand: boolean;
 }
 
+/**
+ * Non-secret scheduling config. The Calendly access token and webhook signing key
+ * are server-only env vars and deliberately absent here — this record is returned
+ * wholesale by GET /public/workspace.
+ */
+export interface SchedulingConfig {
+  provider: "calendly";
+  /** Calendly event type URI the funnel books against. */
+  eventTypeUri: string;
+  eventTypeName: string;
+  /** Public Calendly page, used only as a fallback link. */
+  schedulingUrl: string;
+  durationMinutes: number;
+  enabled: boolean;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -32,6 +48,7 @@ export interface Workspace {
   brand: Brand;
   guide: GuideProfile;
   plan: PlanId;
+  scheduling: SchedulingConfig;
   createdAt: string;
 }
 
@@ -175,7 +192,15 @@ export interface Contact {
   createdAt: string;
   answers?: IntakeAnswers;
   utm?: UtmParams;
+  /** Human-readable booked time. Kept for display. */
   bookedSlot?: string;
+  /** RFC 3339 UTC instant of the booking — the machine-readable truth. */
+  bookedAt?: string;
+  /** IANA zone the invitee booked in. */
+  bookedTimezone?: string;
+  calendlyEventUri?: string;
+  calendlyInviteeUri?: string;
+  bookingCanceledAt?: string;
 }
 
 export type ActivityType =
