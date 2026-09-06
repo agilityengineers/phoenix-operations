@@ -9,6 +9,7 @@ import { type ReactNode } from 'react';
 import HomePage from '@/pages/site/home';
 import GuidePage from '@/pages/site/guide';
 import ResultsPage from '@/pages/site/results';
+import SchedulePage from '@/pages/site/schedule';
 import LegalPage from '@/pages/site/legal';
 import LoginPage from '@/pages/auth/login';
 import SignupPage from '@/pages/auth/signup';
@@ -41,6 +42,7 @@ function Router() {
         <Route path="/" component={HomePage} />
         <Route path="/guide" component={GuidePage} />
         <Route path="/results" component={ResultsPage} />
+        <Route path="/schedule" component={SchedulePage} />
         <Route path="/legal/:doc" component={LegalPage} />
 
         {/* Auth routes */}

@@ -173,6 +173,9 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
+      '@workspace/calendly':
+        specifier: workspace:*
+        version: link:../../lib/integrations/calendly
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -638,7 +641,17 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/integrations/calendly:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.5
+
   scripts:
+    dependencies:
+      '@workspace/calendly':
+        specifier: workspace:*
+        version: link:../lib/integrations/calendly
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

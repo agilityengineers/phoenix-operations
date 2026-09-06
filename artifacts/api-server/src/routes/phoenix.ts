@@ -4,6 +4,7 @@ import { resolveTxt } from "node:dns/promises";
 import { Router, type IRouter, type Request, type RequestHandler } from "express";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { db, phoenixBootstrapTokens, phoenixResetTokens, phoenixUserInvites, phoenixUsers, phoenixWorkspaces } from "@workspace/db";
+import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigured as calendlyConfigured, isWebhookConfigured, listEventTypes, safeTimeZone, slotDayLabel, slotTimeLabel, timeZoneLabel, weekLabel, zonedDateKey } from "@workspace/calendly";
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
 import { bootstrapTokenHash } from "../lib/phoenix-bootstrap";
@@ -16,6 +17,13 @@ const invalid = (res: any) => res.status(400).json({ error: "invalid_json" });
 const siteUrl = (req: Request) => process.env.SITE_URL ?? `${req.protocol}://${req.get("host")}`;
 const limited = (req: Request, bucket: string, max: number) => { const key = `${bucket}:${req.ip}`, old = hits.get(key), now = Date.now(), value = !old || now - old.start > 60_000 ? { count: 0, start: now } : old; value.count++; hits.set(key, value); return value.count > max; };
 const signature = (value: string, secret: string) => createHmac("sha256", secret).update(value).digest("base64url");
+/**
+ * Server secret for capability tokens (booking, reset, invite). Returns null when
+ * unset so callers fail closed with a 503 — never falls back to a literal, which
+ * would make every derived token forgeable.
+ */
+const serverSecret = () => process.env.SESSION_SECRET?.trim() || null;
+const capabilityHash = (value: string, secret: string) => createHmac("sha256", secret).update(value).digest("hex");
 type Session = { userId: string; workspaceId: string; email: string; role: string; exp: number };
 const session = (req: Request): Session | null => {
   const secret = process.env.SESSION_SECRET, [value, supplied] = String(req.cookies?.po_session ?? "").split(".");
@@ -141,17 +149,28 @@ router.post("/auth/login", async (req, res) => {
 });
 router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user || user.workspaceId !== value.workspaceId) return res.status(401).json({ error: "unauthorized" }); res.json({ user: { email: user.email, name: user.name } }); });
 router.post("/auth/logout", (_req, res) => res.clearCookie("po_session", { path: "/" }).json({ ok: true }));
-router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = createHmac("sha256", process.env.SESSION_SECRET ?? "reset").update(token).digest("hex"); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
-router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const tokenHash = createHmac("sha256", process.env.SESSION_SECRET ?? "reset").update(token).digest("hex"); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
+router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
+router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const tokenHash = capabilityHash(token, secret); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
 
 router.get("/public/workspace", async (req, res) => { const value = await publicStore(req); res.json({ workspace: value.store.getWorkspace() }); });
 router.get("/public/funnels/:slug", async (req, res) => { const funnel = (await publicStore(req)).store.funnelBySlug(req.params.slug); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.get("/public/cms", async (req, res) => res.json({ pages: (await publicStore(req)).store.listCms() }));
-router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], adminOnly);
-router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], csrfOrigin);
+router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], adminOnly);
+router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], csrfOrigin);
 router.use(["/workspace", "/members"], requireRole("owner", "admin"));
-router.use(["/webhooks", "/subscriptions"], requireRole("owner", "admin"));
+router.use(["/webhooks", "/subscriptions", "/scheduling"], requireRole("owner", "admin"));
 router.use("/partners", requireRole("platform_admin"));
+const schedulingPatch = (value: unknown) => {
+  if (value === undefined || value === null || typeof value !== "object") return {};
+  const v = value as Record<string, unknown>;
+  return {
+    ...(v.eventTypeUri !== undefined ? { eventTypeUri: String(v.eventTypeUri).slice(0, 300) } : {}),
+    ...(v.eventTypeName !== undefined ? { eventTypeName: String(v.eventTypeName).slice(0, 200) } : {}),
+    ...(v.schedulingUrl !== undefined ? { schedulingUrl: String(v.schedulingUrl).slice(0, 300) } : {}),
+    ...(v.durationMinutes !== undefined ? { durationMinutes: Math.max(1, Math.min(480, Number(v.durationMinutes) || 15)) } : {}),
+    ...(v.enabled !== undefined ? { enabled: Boolean(v.enabled) } : {}),
+  };
+};
 router.get("/workspace", async (req, res) => res.json({ workspace: (await tenantStore(req)).getWorkspace() }));
 router.get("/workspace/domain-status", async (req, res) => { const [row] = await db.select({ customDomain: phoenixWorkspaces.customDomain, pendingCustomDomain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken, verifiedAt: phoenixWorkspaces.customDomainVerifiedAt }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, identity(req).workspaceId)).limit(1); if (!row) return res.status(404).json({ error: "workspace_not_found" }); res.json({ state: row.pendingCustomDomain ? "pending" : row.customDomain ? "verified" : "none", domain: row.pendingCustomDomain ?? row.customDomain, verifiedAt: row.verifiedAt, ...(row.pendingCustomDomain && row.token ? { txtName: `_phoenix-verification.${row.pendingCustomDomain}`, txtValue: row.token } : {}) }); });
 router.post("/workspace/domain-verify", async (req, res) => { const workspaceId = identity(req).workspaceId, [row] = await db.select({ domain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, workspaceId)).limit(1); if (!row?.domain || !row.token) return res.status(400).json({ error: "no_pending_domain" }); let records: string[][]; try { records = await resolveTxt(`_phoenix-verification.${row.domain}`); } catch { return res.status(422).json({ error: "dns_verification_not_found", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); } if (!records.some(parts => parts.join("") === row.token)) return res.status(422).json({ error: "dns_verification_mismatch", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); try { const verifiedAt = new Date(), workspace = await db.transaction(async tx => { const locked = await tx.execute(sql`SELECT state, pending_custom_domain, domain_verification_token FROM phoenix_workspaces WHERE id = ${workspaceId} FOR UPDATE`), current = locked.rows[0] as { state: Record<string, unknown>; pending_custom_domain: string | null; domain_verification_token: string | null } | undefined; if (!current || current.pending_custom_domain !== row.domain || current.domain_verification_token !== row.token) throw new Error("domain_changed"); const store = new PhoenixStore(current.state), ws = store.getWorkspace(); store.updateWorkspace({ domain: row.domain, brand: { ...ws.brand, customDomain: row.domain } }); await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), customDomain: row.domain, pendingCustomDomain: null, domainVerificationToken: null, customDomainVerifiedAt: verifiedAt, updatedAt: verifiedAt }).where(eq(phoenixWorkspaces.id, workspaceId)); return store.getWorkspace(); }); res.json({ state: "verified", domain: row.domain, verifiedAt, workspace }); } catch (err) { if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "domain_taken" }); if ((err as Error).message === "domain_changed") return res.status(409).json({ error: "domain_changed" }); throw err; } });
@@ -169,18 +188,225 @@ router.get("/webhooks", async (req, res) => res.json({ webhooks: (await tenantSt
 router.get("/sync-log", async (req, res) => res.json({ entries: (await tenantStore(req)).listSyncLog() }));
 router.get("/subscriptions", async (req, res) => res.json({ subscriptions: (await tenantStore(req)).listSubscriptions() }));
 router.get("/partners", async (req, res) => res.json({ workspaces: (await tenantStore(req)).listPartners() }));
+router.get("/scheduling/status", async (req, res) => {
+  const scheduling = schedulingOf(await tenantStore(req));
+  if (!calendlyConfigured()) return res.json({ tokenPresent: false, webhookConfigured: isWebhookConfigured(), account: null, scheduling, connected: false });
+  const me = await currentUser();
+  res.json({
+    tokenPresent: true,
+    webhookConfigured: isWebhookConfigured(),
+    account: me.ok ? { name: me.data.name, email: me.data.email, schedulingUrl: me.data.schedulingUrl, timezone: me.data.timezone } : null,
+    error: me.ok ? undefined : me.error,
+    scheduling,
+    connected: me.ok && Boolean(scheduling?.enabled && scheduling.eventTypeUri),
+  });
+});
+router.get("/scheduling/event-types", async (_req, res) => {
+  if (!calendlyConfigured()) return res.status(503).json({ error: "not_configured" });
+  const me = await currentUser();
+  if (!me.ok) return res.status(502).json({ error: "calendly_unavailable", reason: me.error });
+  const types = await listEventTypes(me.data.uri);
+  if (!types.ok) return res.status(502).json({ error: "calendly_unavailable", reason: types.error });
+  res.json({ eventTypes: types.data });
+});
 
-router.patch("/workspace", async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });
-router.post("/members/invite", async (req, res) => { const email = String(body(req).email ?? "").trim().toLowerCase(), role = ["admin", "owner", "staff", "partner"].includes(String(body(req).role)) ? String(body(req).role) : "staff"; if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" }); const token = randomBytes(32).toString("base64url"), tokenHash = createHmac("sha256", process.env.SESSION_SECRET ?? "invite").update(token).digest("hex"); await db.insert(phoenixUserInvites).values({ id: `inv_${randomUUID()}`, tokenHash, workspaceId: identity(req).workspaceId, email, role, expiresAt: new Date(Date.now() + 7 * 86400_000) }); const member = await mutatePhoenixStore(identity(req).workspaceId, store => store.invite(email, role)); res.json({ member, ...(process.env.NODE_ENV !== "production" ? { inviteToken: token } : {}) }); });
+router.patch("/workspace", async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) }, scheduling: { ...current.scheduling, ...schedulingPatch(b.scheduling) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });
+router.post("/members/invite", async (req, res) => { const email = String(body(req).email ?? "").trim().toLowerCase(), role = ["admin", "owner", "staff", "partner"].includes(String(body(req).role)) ? String(body(req).role) : "staff"; if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "invites_unavailable" }); const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixUserInvites).values({ id: `inv_${randomUUID()}`, tokenHash, workspaceId: identity(req).workspaceId, email, role, expiresAt: new Date(Date.now() + 7 * 86400_000) }); const member = await mutatePhoenixStore(identity(req).workspaceId, store => store.invite(email, role)); res.json({ member, ...(process.env.NODE_ENV !== "production" ? { inviteToken: token } : {}) }); });
 router.post("/cms/toggle", async (req, res) => { const b = body(req); if (!b.pageId || !b.sectionId) return res.status(400).json({ error: "missing_fields" }); await mutatePhoenixStore(identity(req).workspaceId, store => store.toggle(String(b.pageId), String(b.sectionId), Boolean(b.enabled))); res.json({ ok: true }); });
 router.patch("/funnels/:id", async (req, res) => { const b = body(req), allowed = ["name", "slug", "segment", "offer", "status", "storybrand", "variants", "blocks", "weights"], funnel = await mutatePhoenixStore(identity(req).workspaceId, store => store.updateFunnel(req.params.id, Object.fromEntries(allowed.filter(k => b[k] !== undefined).map(k => [k, b[k]])))); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.post("/funnels/:id", async (req, res) => { if (req.params.id !== "new") return res.status(405).json({ error: "use_patch" }); const b = body(req), funnelSlug = String(b.slug ?? "").replace(/[^a-z0-9-]/g, ""); if (!funnelSlug) return res.status(400).json({ error: "slug_required" }); const funnel = await mutatePhoenixStore(identity(req).workspaceId, store => { if (store.funnelBySlug(funnelSlug)) return null; return store.createFunnel({ ...b, id: undefined, workspaceId: identity(req).workspaceId, name: String(b.name || "New funnel"), slug: funnelSlug, status: "draft", variants: Array.isArray(b.variants) && b.variants.length ? b.variants : [{ id: "A", label: "A", headline: "", trafficPct: 100 }], stats: { visits: 0, leads: 0, cvr: "—" } }); }); if (!funnel) return res.status(409).json({ error: "slug_taken" }); res.json({ funnel }); });
 
 router.post("/intake/session", async (req, res) => { if (limited(req, "session", 60)) return res.status(429).json({ error: "rate_limited" }); const b = body(req), funnelSlug = String(b.funnelSlug ?? ""), token = b.resumeToken, tenant = await publicWorkspace(req); if (!tenant || !funnelSlug || typeof token !== "string" || token.length > 128) return res.status(400).json({ error: "missing_fields" }); const saved = await mutatePhoenixStore(tenant.id, store => { if (!store.funnelBySlug(funnelSlug)) return null; const previous = store.session(token) as Record<string, unknown> | null; return store.saveSession({ id: token, workspaceId: tenant.id, funnelSlug, variant: String(b.variant ?? "A"), resumeToken: token, step: Math.min(5, Math.max(1, Number(b.step ?? 1))), answers: b.answers ?? {}, utm: b.utm ?? {}, submitted: Boolean(previous?.submitted) }); }); if (!saved) return res.status(404).json({ error: "unknown_funnel" }); res.json({ ok: true, updatedAt: saved.updatedAt }); });
 router.get("/intake/session", async (req, res) => { const token = String(req.query.token ?? ""), tenant = await publicWorkspace(req); if (!token || !tenant) return res.status(400).json({ error: "missing_token" }); const store = await getPhoenixStore(tenant.id), saved = store?.session(token); if (!saved) return res.status(404).json({ error: "not_found" }); res.json({ session: saved }); });
-router.post("/intake/submit", async (req, res) => { if (limited(req, "submit", 10)) return res.status(429).json({ error: "rate_limited" }); const b = body(req); if (String(b.website ?? "").trim()) return res.json({ ok: true }); const answers = (b.answers ?? {}) as Answers, name = String(answers.name ?? "").trim(), email = String(answers.email ?? "").trim(), resumeToken = typeof b.resumeToken === "string" ? b.resumeToken : "", tenant = await publicWorkspace(req); if (!tenant || !b.funnelSlug || !resumeToken || resumeToken.length > 128 || !name || !/.+@.+\..+/.test(email)) return res.status(400).json({ error: "validation_failed" }); const value = score(answers), utm = (b.utm ?? {}) as Record<string, string | undefined>, source = utm.utm_source ? `${utm.utm_source} / ${utm.utm_medium ?? "direct"}` : utm.referrer ? "referral" : "direct", bookingToken = randomBytes(32).toString("base64url"), bookingTokenHash = createHmac("sha256", process.env.SESSION_SECRET ?? "booking").update(bookingToken).digest("hex"); const contact = await mutatePhoenixStore(tenant.id, store => { const funnel = store.funnelBySlug(String(b.funnelSlug)); if (!funnel) return null; const existing = store.listContacts().find(c => c.email.toLowerCase() === email.toLowerCase()), saved = existing ? store.updateContact(existing.id, { score: value, answers, utm })! : store.createContact({ workspaceId: tenant.id, pipelineId: "prospects", name, company: String(answers.company ?? "").trim() || "—", role: String(answers.role ?? "—"), email, phone: answers.phone ? String(answers.phone) : undefined, funnel: funnel.name, source, score: value, stage: 0, position: 0, owner: "—", answers, utm }); store.saveSession({ id: resumeToken, workspaceId: tenant.id, funnelSlug: b.funnelSlug, variant: String(b.variant ?? "A"), resumeToken, step: 5, answers, utm, submitted: true, bookingTokenHash, bookingContactId: saved.id, bookingExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString() }); store.addActivity({ workspaceId: tenant.id, contactId: saved.id, type: "intake_completed", title: `Intake completed — scored ${value}`, body: "" }); return saved; }); if (!contact) return res.status(404).json({ error: "unknown_funnel" }); res.json({ ok: true, bookingToken, score: value }); });
+router.post("/intake/submit", async (req, res) => { if (limited(req, "submit", 10)) return res.status(429).json({ error: "rate_limited" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "intake_unavailable" }); const b = body(req); if (String(b.website ?? "").trim()) return res.json({ ok: true }); const answers = (b.answers ?? {}) as Answers, name = String(answers.name ?? "").trim(), email = String(answers.email ?? "").trim(), resumeToken = typeof b.resumeToken === "string" ? b.resumeToken : "", tenant = await publicWorkspace(req); if (!tenant || !b.funnelSlug || !resumeToken || resumeToken.length > 128 || !name || !/.+@.+\..+/.test(email)) return res.status(400).json({ error: "validation_failed" }); const value = score(answers), utm = (b.utm ?? {}) as Record<string, string | undefined>, source = utm.utm_source ? `${utm.utm_source} / ${utm.utm_medium ?? "direct"}` : utm.referrer ? "referral" : "direct", bookingToken = randomBytes(32).toString("base64url"), bookingTokenHash = capabilityHash(bookingToken, secret); const contact = await mutatePhoenixStore(tenant.id, store => { const funnel = store.funnelBySlug(String(b.funnelSlug)); if (!funnel) return null; const existing = store.listContacts().find(c => c.email.toLowerCase() === email.toLowerCase()), saved = existing ? store.updateContact(existing.id, { score: value, answers, utm })! : store.createContact({ workspaceId: tenant.id, pipelineId: "prospects", name, company: String(answers.company ?? "").trim() || "—", role: String(answers.role ?? "—"), email, phone: answers.phone ? String(answers.phone) : undefined, funnel: funnel.name, source, score: value, stage: 0, position: 0, owner: "—", answers, utm }); store.saveSession({ id: resumeToken, workspaceId: tenant.id, funnelSlug: b.funnelSlug, variant: String(b.variant ?? "A"), resumeToken, step: 5, answers, utm, submitted: true, bookingTokenHash, bookingContactId: saved.id, bookingExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString() }); store.addActivity({ workspaceId: tenant.id, contactId: saved.id, type: "intake_completed", title: `Intake completed — scored ${value}`, body: "" }); return saved; }); if (!contact) return res.status(404).json({ error: "unknown_funnel" }); res.json({ ok: true, bookingToken, score: value }); });
 
-router.post("/intake/book", async (req, res) => { if (limited(req, "book", 10)) return res.status(429).json({ error: "rate_limited" }); const b = body(req), slot = String(b.slot ?? ""), resumeToken = typeof b.resumeToken === "string" ? b.resumeToken : "", bookingToken = typeof b.bookingToken === "string" ? b.bookingToken : "", tenant = await publicWorkspace(req); if (!tenant || !slot || slot.length > 64 || !resumeToken || !bookingToken) return res.status(400).json({ error: "missing_fields" }); const booked = await mutatePhoenixStore(tenant.id, store => { const saved = store.session(resumeToken) as Record<string, unknown> | null, hash = String(saved?.bookingTokenHash ?? ""), supplied = createHmac("sha256", process.env.SESSION_SECRET ?? "booking").update(bookingToken).digest("hex"), expected = Buffer.from(hash), actual = Buffer.from(supplied); if (!saved?.submitted || !hash || !saved.bookingExpiresAt || new Date(String(saved.bookingExpiresAt)).getTime() <= Date.now() || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return false; const contact = store.contact(String(saved.bookingContactId ?? "")); if (!contact) return false; const stage = (store.listPipelines().find(p => p.id === contact.pipelineId)?.stages ?? []).indexOf("Call scheduled"); store.updateContact(contact.id, { bookedSlot: slot, ...(stage >= 0 ? { stage } : {}) }); store.saveSession({ ...saved, resumeToken, bookingTokenHash: "", bookingContactId: "", bookingExpiresAt: "", bookingConsumedAt: new Date().toISOString() }); store.addActivity({ workspaceId: tenant.id, contactId: contact.id, type: "call", title: "Call booked", body: `${slot} Eastern · 15 minutes` }); return true; }); if (!booked) return res.status(403).json({ error: "invalid_booking_capability" }); res.json({ ok: true }); });
+const CALL_SCHEDULED = "Call scheduled";
+const AVAILABILITY_TTL_MS = 60_000;
+const availabilityCache = new Map<string, { at: number; body: unknown }>();
+type Scheduling = { provider: string; eventTypeUri: string; eventTypeName: string; schedulingUrl: string; durationMinutes: number; enabled: boolean };
+const schedulingOf = (store: NonNullable<Awaited<ReturnType<typeof getPhoenixStore>>>) => store.getWorkspace().scheduling as Scheduling | undefined;
+const schedulingLive = (scheduling: Scheduling | undefined) => Boolean(calendlyConfigured() && scheduling?.enabled && scheduling.eventTypeUri);
+
+/**
+ * Real availability from the tenant's Calendly event type, grouped into the day
+ * columns the funnel's slot grid already renders. Cached briefly per tenant and
+ * range so a traffic spike doesn't burn Calendly's rate limit. The access token
+ * never leaves the server.
+ */
+router.get("/public/scheduling/availability", async (req, res) => {
+  if (limited(req, "availability", 120)) return res.status(429).json({ error: "rate_limited" });
+  const tenant = await publicWorkspace(req);
+  const store = tenant ? await getPhoenixStore(tenant.id) : null;
+  if (!tenant || !store) return res.status(404).json({ error: "not_found" });
+  const scheduling = schedulingOf(store), timezone = safeTimeZone(req.query.timezone);
+  if (!schedulingLive(scheduling)) return res.json({ configured: false, timezone, days: [], schedulingUrl: scheduling?.schedulingUrl ?? "", durationMinutes: scheduling?.durationMinutes ?? 15 });
+
+  const requestedStart = new Date(String(req.query.start ?? ""));
+  const start = Number.isNaN(requestedStart.getTime()) ? new Date() : requestedStart;
+  const span = Math.min(14, Math.max(1, Number(req.query.days ?? 7) || 7));
+  const end = new Date(start.getTime() + span * 86_400_000);
+
+  const key = `${tenant.id}:${timezone}:${start.toISOString().slice(0, 13)}:${span}`;
+  const hit = availabilityCache.get(key);
+  if (hit && Date.now() - hit.at < AVAILABILITY_TTL_MS) return res.json(hit.body);
+  // Keys vary by tenant, zone and hour, so drop stale entries rather than growing forever.
+  if (availabilityCache.size > 200) for (const [k, v] of availabilityCache) if (Date.now() - v.at >= AVAILABILITY_TTL_MS) availabilityCache.delete(k);
+
+  const result = await availableTimes(scheduling!.eventTypeUri, start, end);
+  if (!result.ok) return res.status(502).json({ error: "scheduling_unavailable", reason: result.error, schedulingUrl: scheduling!.schedulingUrl });
+
+  const byDay = new Map<string, { date: string; label: string; slots: Array<{ startTime: string; label: string }> }>();
+  for (const slot of result.data) {
+    const date = zonedDateKey(slot.startTime, timezone);
+    if (!byDay.has(date)) byDay.set(date, { date, label: slotDayLabel(slot.startTime, timezone), slots: [] });
+    byDay.get(date)!.slots.push({ startTime: slot.startTime, label: slotTimeLabel(slot.startTime, timezone) });
+  }
+  const days = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const anchor = days[0]?.slots[0]?.startTime ?? start.toISOString();
+  const payload = {
+    configured: true, timezone, days,
+    weekLabel: weekLabel(anchor, timezone), timezoneLabel: timeZoneLabel(anchor, timezone),
+    durationMinutes: scheduling!.durationMinutes, schedulingUrl: scheduling!.schedulingUrl,
+    rangeStart: start.toISOString(), rangeEnd: end.toISOString(),
+  };
+  availabilityCache.set(key, { at: Date.now(), body: payload });
+  res.json(payload);
+});
+
+/**
+ * Direct booking from the public /schedule page — referrals and emailed links,
+ * with no intake behind them. Unauthenticated by design, so it leans on the same
+ * defences as /intake/submit: honeypot, tight rate limit, email validation. The
+ * slot itself is authorised by Calendly, which rejects anything not genuinely open.
+ */
+router.post("/public/scheduling/book", async (req, res) => {
+  if (limited(req, "direct-book", 5)) return res.status(429).json({ error: "rate_limited" });
+  const b = body(req);
+  if (String(b.website ?? "").trim()) return res.json({ ok: true });
+  const name = String(b.name ?? "").trim();
+  const email = String(b.email ?? "").trim();
+  const startTime = String(b.startTime ?? "");
+  const timezone = safeTimeZone(b.timezone);
+  const startsAt = new Date(startTime);
+  if (!name || !/.+@.+\..+/.test(email) || Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) return res.status(400).json({ error: "validation_failed" });
+  const tenant = await publicWorkspace(req);
+  const store = tenant ? await getPhoenixStore(tenant.id) : null;
+  if (!tenant || !store) return res.status(404).json({ error: "not_found" });
+  const scheduling = schedulingOf(store);
+  if (!schedulingLive(scheduling)) return res.status(503).json({ error: "scheduling_unavailable" });
+
+  const booking = await createInvitee({
+    eventTypeUri: scheduling!.eventTypeUri,
+    startTime: startsAt.toISOString(),
+    invitee: { name, email, timezone },
+  });
+  if (!booking.ok) {
+    const status = booking.error === "slot_unavailable" ? 409 : 502;
+    return res.status(status).json({ error: booking.error === "slot_unavailable" ? "slot_unavailable" : "scheduling_unavailable", reason: booking.error });
+  }
+
+  const label = bookedSlotLabel(booking.data.startTime, timezone);
+  await mutatePhoenixStore(tenant.id, s2 => {
+    const existing = s2.contactByEmail(email);
+    const stage = s2.stageIndex(existing?.pipelineId ?? "prospects", CALL_SCHEDULED);
+    const fields = {
+      bookedSlot: label, bookedAt: booking.data.startTime, bookedTimezone: timezone,
+      calendlyEventUri: booking.data.eventUri, calendlyInviteeUri: booking.data.inviteeUri,
+      bookingCanceledAt: undefined, ...(stage >= 0 ? { stage } : {}),
+    };
+    // Someone who already came through the funnel keeps their score and answers.
+    const contact = existing
+      ? s2.updateContact(existing.id, fields)!
+      : s2.createContact({
+          workspaceId: tenant.id, pipelineId: "prospects", name,
+          company: String(b.company ?? "").trim() || "—", role: String(b.role ?? "").trim() || "—",
+          email, ...(b.phone ? { phone: String(b.phone).trim() } : {}),
+          funnel: "Direct booking", source: "direct booking", score: 50,
+          stage: Math.max(0, stage), position: 0, owner: "—", ...fields,
+        });
+    s2.addActivity({ workspaceId: tenant.id, contactId: contact.id, type: "call", title: "Call booked", body: `${label} ${timeZoneLabel(booking.data.startTime, timezone)} · ${scheduling!.durationMinutes} minutes · booked from /schedule` });
+  });
+  res.json({ ok: true, bookedSlot: label, startTime: booking.data.startTime, timezone });
+});
+
+/**
+ * Books the call. Runs in three phases so the tenant's row lock is never held
+ * across a network call to Calendly:
+ *   1. verify the single-use capability token and claim the booking (locked)
+ *   2. create the event in Calendly (unlocked)
+ *   3. record it, move the stage, burn the token — or release the claim (locked)
+ * The token is only consumed once Calendly has actually accepted the booking, so
+ * a failure leaves the visitor able to pick another time.
+ */
+router.post("/intake/book", async (req, res) => {
+  if (limited(req, "book", 10)) return res.status(429).json({ error: "rate_limited" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "booking_unavailable" });
+  const b = body(req);
+  const resumeToken = typeof b.resumeToken === "string" ? b.resumeToken : "";
+  const bookingToken = typeof b.bookingToken === "string" ? b.bookingToken : "";
+  const startTime = String(b.startTime ?? "");
+  const timezone = safeTimeZone(b.timezone);
+  const startsAt = new Date(startTime);
+  if (!resumeToken || !bookingToken || !startTime || Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) return res.status(400).json({ error: "missing_fields" });
+  const tenant = await publicWorkspace(req);
+  const store = tenant ? await getPhoenixStore(tenant.id) : null;
+  if (!tenant || !store) return res.status(404).json({ error: "not_found" });
+  const scheduling = schedulingOf(store);
+  if (!schedulingLive(scheduling)) return res.status(503).json({ error: "scheduling_unavailable" });
+
+  // Phase 1 — verify the capability and claim it.
+  const claim = await mutatePhoenixStore(tenant.id, s2 => {
+    const saved = s2.session(resumeToken) as Record<string, unknown> | null;
+    const hash = String(saved?.bookingTokenHash ?? "");
+    const supplied = capabilityHash(bookingToken, secret);
+    const expected = Buffer.from(hash), actual = Buffer.from(supplied);
+    if (!saved?.submitted || !hash || !saved.bookingExpiresAt || new Date(String(saved.bookingExpiresAt)).getTime() <= Date.now() || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+    const inFlight = String(saved.bookingInFlightAt ?? "");
+    if (inFlight && Date.now() - new Date(inFlight).getTime() < 30_000) return "busy" as const;
+    const contact = s2.contact(String(saved.bookingContactId ?? ""));
+    if (!contact) return null;
+    s2.saveSession({ ...saved, resumeToken, bookingInFlightAt: new Date().toISOString() });
+    return { contactId: contact.id, name: contact.name, email: contact.email };
+  });
+  if (claim === null) return res.status(403).json({ error: "invalid_booking_capability" });
+  if (claim === "busy") return res.status(409).json({ error: "booking_in_progress" });
+
+  // Phase 2 — the real booking, on the real calendar. No lock held here.
+  const release = () => mutatePhoenixStore(tenant.id, s2 => {
+    const saved = s2.session(resumeToken) as Record<string, unknown> | null;
+    if (saved) s2.saveSession({ ...saved, resumeToken, bookingInFlightAt: "" });
+  });
+  const booking = await createInvitee({
+    eventTypeUri: scheduling!.eventTypeUri,
+    startTime: startsAt.toISOString(),
+    invitee: { name: claim.name, email: claim.email, timezone },
+    // Echoed back on invitee.created so the webhook can find this session.
+    tracking: { utm_content: resumeToken },
+  });
+  if (!booking.ok) {
+    await release();
+    const status = booking.error === "slot_unavailable" ? 409 : 502;
+    return res.status(status).json({ error: booking.error === "slot_unavailable" ? "slot_unavailable" : "scheduling_unavailable", reason: booking.error });
+  }
+
+  // Phase 3 — record it and burn the capability.
+  const label = bookedSlotLabel(booking.data.startTime, timezone);
+  await mutatePhoenixStore(tenant.id, s2 => {
+    const saved = s2.session(resumeToken) as Record<string, unknown> | null;
+    const contact = s2.contact(claim.contactId);
+    if (!contact) return;
+    const stage = s2.stageIndex(contact.pipelineId, CALL_SCHEDULED);
+    s2.updateContact(contact.id, {
+      bookedSlot: label, bookedAt: booking.data.startTime, bookedTimezone: timezone,
+      calendlyEventUri: booking.data.eventUri, calendlyInviteeUri: booking.data.inviteeUri,
+      bookingCanceledAt: undefined, ...(stage >= 0 ? { stage } : {}),
+    });
+    if (saved) s2.saveSession({ ...saved, resumeToken, bookingTokenHash: "", bookingContactId: "", bookingExpiresAt: "", bookingInFlightAt: "", bookingConsumedAt: new Date().toISOString() });
+    s2.addActivity({ workspaceId: tenant.id, contactId: contact.id, type: "call", title: "Call booked", body: `${label} ${timeZoneLabel(booking.data.startTime, timezone)} · ${scheduling!.durationMinutes} minutes` });
+  });
+  res.json({ ok: true, bookedSlot: label, startTime: booking.data.startTime, timezone, cancelUrl: booking.data.cancelUrl, rescheduleUrl: booking.data.rescheduleUrl });
+});
 const contactInput = (store: NonNullable<Awaited<ReturnType<typeof getPhoenixStore>>>, b: Record<string, unknown>, workspaceId: string, defaults: { pipelineId?: string; source?: string; funnel?: string } = {}) => {
   const name = String(b.name ?? "").trim();
   if (!name) return null;

@@ -43,6 +43,14 @@ export const seedWorkspace: Workspace = {
       "I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses. I've seen what happens when growth starts creating more complexity than the people and processes were built to handle.",
     showGuideBand: true,
   },
+  scheduling: {
+    provider: "calendly",
+    eventTypeUri: "",
+    eventTypeName: "",
+    schedulingUrl: "",
+    durationMinutes: 15,
+    enabled: false,
+  },
 };
 
 export const seedPartnerWorkspaces: Workspace[] = [

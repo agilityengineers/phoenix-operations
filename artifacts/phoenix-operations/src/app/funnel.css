@@ -486,6 +486,99 @@
   color: #fff;
 }
 
+/* Real availability returns however many days it returns — usually weekdays, but
+   not always five. Keep the columns even without letting this out-specify the
+   mobile rules below. */
+@media (min-width: 861px) {
+  .slot-grid.cols-1 {
+    grid-template-columns: 1fr;
+  }
+  .slot-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .slot-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .slot-grid.cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .slot-grid.cols-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+.slot-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.slot-nav button {
+  border: 1px solid var(--border-6);
+  background: var(--card-alt);
+  color: var(--ink);
+  border-radius: 6px;
+  min-width: 34px;
+  min-height: 34px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.slot-nav button:hover:not(:disabled) {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+.slot-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.slot-note {
+  margin: 0;
+  padding: 28px 4px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted-3);
+}
+.slot-note a,
+.slot-note button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--orange);
+  font-weight: 700;
+  cursor: pointer;
+}
+.slot-note a:hover,
+.slot-note button:hover {
+  color: var(--orange-hover);
+}
+.slot-skeleton {
+  display: grid;
+  gap: 8px;
+}
+.slot-skeleton span {
+  display: block;
+  height: 44px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f4efe4 25%, #ece5d6 37%, #f4efe4 63%);
+  background-size: 400% 100%;
+  animation: slot-shimmer 1.4s ease infinite;
+}
+@keyframes slot-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slot-skeleton span {
+    animation: none;
+  }
+}
+
 /* ── Mobile (majority of funnel traffic) — per Mobile Funnel.dc.html ───────── */
 @media (max-width: 860px) {
   .fnl-hero {
@@ -588,6 +681,18 @@
   }
   .slot-btn {
     padding: 14px;
+  }
+  .slot-card-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* Heading and timezone share the first row; keep the pager tucked to the right. */
+  .slot-card-head .slot-nav {
+    margin-left: auto;
+  }
+  .slot-note {
+    padding: 20px 2px;
+    font-size: 13px;
   }
   .booked-card {
     padding: 28px 20px;

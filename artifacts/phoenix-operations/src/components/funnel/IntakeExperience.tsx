@@ -2,8 +2,11 @@ import { Link } from "wouter";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Funnel, FunnelVariant, GuideProfile, IntakeAnswers, UtmParams, Workspace } from "@/lib/types";
 import { apiRequest, publicWorkspaceSlug } from "@/lib/store/api";
+import SlotPicker, { type BookResult } from "@/components/funnel/SlotPicker";
 
 // The funnel landing + 5-step qualifying intake + scheduler.
+// The scheduler shows the guide's real Calendly availability and books the call
+// on their actual calendar; see components/funnel/SlotPicker.tsx.
 // Answers persist to localStorage immediately and sync to the server
 // (debounced) so a returning visitor resumes at their step — on this device
 // via localStorage, across devices via the resume token in the URL.
@@ -45,14 +48,6 @@ const STEP_TITLES: Record<number, string> = {
   4: "Two honest questions",
   5: "Review and submit",
 };
-
-const SCHEDULE_DAYS = [
-  { label: "Mon 9/7", slots: ["9:15 AM", "11:30 AM", "2:00 PM", "4:15 PM"] },
-  { label: "Tue 9/8", slots: ["9:15 AM", "11:30 AM", "2:00 PM", "4:15 PM"] },
-  { label: "Wed 9/9", slots: ["9:15 AM", "11:30 AM", "2:00 PM", "4:15 PM"] },
-  { label: "Thu 9/10", slots: ["9:15 AM", "11:30 AM", "2:00 PM", "4:15 PM"] },
-  { label: "Fri 9/11", slots: ["9:15 AM", "11:30 AM", "2:00 PM", "4:15 PM"] },
-];
 
 type Persisted = {
   step: number;
@@ -249,21 +244,34 @@ export default function IntakeExperience({ funnel, variant, guide, workspace }: 
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const book = async (day: string, time: string) => {
-    const slot = `${day} · ${time}`;
+  const book = async (startTime: string, timezone: string): Promise<BookResult> => {
     if (!bookingTokenRef.current || submitting) {
       setValidationMsg("This booking link is unavailable. Please submit the intake again.");
-      return;
+      return { booked: false };
     }
     setSubmitting(true);
     setValidationMsg("");
     try {
-      await apiRequest("/intake/book", { method: "POST", body: JSON.stringify({ workspace: publicWorkspaceSlug(), resumeToken: tokenRef.current, bookingToken: bookingTokenRef.current, slot }) });
+      const confirmed = await apiRequest<{ bookedSlot: string }>("/intake/book", {
+        method: "POST",
+        body: JSON.stringify({ workspace: publicWorkspaceSlug(), resumeToken: tokenRef.current, bookingToken: bookingTokenRef.current, startTime, timezone }),
+      });
+      // The capability token is single-use and has now been spent server-side.
       bookingTokenRef.current = undefined;
-      setBookedSlot(slot);
-      persist({ bookedSlot: slot, bookingToken: undefined });
-    } catch {
-      setValidationMsg("We couldn't confirm that time. Please choose another slot or submit the intake again.");
+      setBookedSlot(confirmed.bookedSlot);
+      persist({ bookedSlot: confirmed.bookedSlot, bookingToken: undefined });
+      return { booked: true };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "";
+      setValidationMsg(
+        reason === "slot_unavailable"
+          ? "That time was just taken. Here are the times still open."
+          : reason === "scheduling_unavailable"
+            ? "We couldn't reach the calendar just now. Please try again in a moment."
+            : "We couldn't confirm that time. Please choose another slot or submit the intake again."
+      );
+      // Only the "someone beat you to it" case means the grid is out of date.
+      return { booked: false, refresh: reason === "slot_unavailable" };
     } finally {
       setSubmitting(false);
     }
@@ -712,36 +720,27 @@ export default function IntakeExperience({ funnel, variant, guide, workspace }: 
               <span className="success-disc">✓</span>
               <h1>Thanks, {firstName}. Last step: pick a time.</h1>
               <p>
-                15 minutes. No prep, no pressure. A confirmation and calendar invite will land in
-                your inbox.
+                {workspace.scheduling?.durationMinutes ?? 15} minutes. No prep, no pressure. A
+                confirmation and calendar invite will land in your inbox.
               </p>
             </div>
             {!bookedSlot ? (
-              <div className="slot-card">
-                <div className="slot-card-head">
-                  <p className="week">Week of September 7</p>
-                  <span className="tz">All times Eastern · 15 min</span>
-                </div>
-                <div className="slot-grid">
-                  {SCHEDULE_DAYS.map((d) => (
-                    <div key={d.label} className="slot-col">
-                      <div className="slot-day-label">{d.label}</div>
-                      {d.slots.map((s) => (
-                        <button key={s} type="button" className="slot-btn" disabled={submitting} onClick={() => book(d.label, s)}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <>
+                <SlotPicker onBook={book} busy={submitting} />
+                {validationMsg && (
+                  <p className="validation-msg" role="status" style={{ marginTop: 14, textAlign: "center" }}>
+                    {validationMsg}
+                  </p>
+                )}
+              </>
             ) : (
               <div className="booked-card">
                 <p className="kicker">You&apos;re booked</p>
-                <p className="booked-slot">{bookedSlot} Eastern</p>
+                <p className="booked-slot">{bookedSlot}</p>
                 <p className="booked-note">
-                  Confirmation sent to {a.email}. Come ready to talk about the issue creating the
-                  most frustration right now — nothing else to prepare.
+                  A confirmation and calendar invite are on their way to {a.email}. Come ready to
+                  talk about the issue creating the most frustration right now — nothing else to
+                  prepare.
                 </p>
                 <Link href={`/?workspace=${encodeURIComponent(publicWorkspaceSlug())}`}>← Back to the site</Link>
               </div>

@@ -8,7 +8,17 @@ export type Contact = {
   id: string; workspaceId: string; pipelineId: string; name: string; company: string;
   role: string; email: string; phone?: string; funnel: string; source: string;
   score: number; stage: number; position: number; owner: string; createdAt: string;
-  answers?: Answers; utm?: Record<string, string | undefined>; bookedSlot?: string;
+  answers?: Answers; utm?: Record<string, string | undefined>;
+  /** Human-readable booked time, e.g. "Mon Sep 14 · 9:15 AM". Kept for display. */
+  bookedSlot?: string;
+  /** RFC 3339 UTC instant of the booking — the machine-readable truth. */
+  bookedAt?: string;
+  /** IANA zone the invitee booked in, so we render their time, not ours. */
+  bookedTimezone?: string;
+  calendlyEventUri?: string;
+  calendlyInviteeUri?: string;
+  /** Set when a booking is cancelled in Calendly, so the CRM stops claiming a call. */
+  bookingCanceledAt?: string;
 };
 export type Activity = { id: string; workspaceId: string; contactId: string; type: string; title: string; body: string; at: string };
 
@@ -19,6 +29,9 @@ const workspace = {
   status: "live", plan: "network", createdAt: "2026-01-05T00:00:00Z",
   brand: { logoUrl: "/assets/logo.png", markUrl: "/assets/mark.png", primaryColor: "#D76C2C", inkColor: "#14263B", paperColor: "#F7F4EE", customDomain: "phoenixoperations.com" },
   guide: { photoUrl: "/assets/headshot.jpg", name: "Joshua Kornitsky", title: "Founder, Phoenix Operations", story: "I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses.", showGuideBand: true },
+  // Non-secret scheduling config only. Credentials live in env vars — this whole
+  // record is returned by GET /workspace and GET /public/workspace.
+  scheduling: { provider: "calendly", eventTypeUri: "", eventTypeName: "", schedulingUrl: "", durationMinutes: 15, enabled: false },
 };
 const defaultBlocks = () => [
   { id: "frustration", name: "Frustration deep-dive", desc: "3 questions · Conversation Guide: Lack of Control", required: true, enabled: true, order: 0 },
@@ -60,6 +73,8 @@ export class PhoenixStore {
     if (state) {
       Object.assign(this, clone(state));
       this.sessions = new Map(Object.entries((state.sessions ?? {}) as Record<string, Record<string, unknown>>));
+      // Tenants provisioned before scheduling existed have no `scheduling` key.
+      this.workspace = { ...this.workspace, scheduling: { ...workspace.scheduling, ...(this.workspace?.scheduling ?? {}) } };
     }
   }
   snapshot() {
@@ -70,12 +85,17 @@ export class PhoenixStore {
       webhooks: this.webhooks, syncLog: this.syncLog, subscriptions: this.subscriptions,
     });
   }
-  getWorkspace() { return clone(this.workspace); } updateWorkspace(patch: Record<string, unknown>) { this.workspace = { ...this.workspace, ...patch, brand: { ...this.workspace.brand, ...((patch.brand as object) ?? {}) }, guide: { ...this.workspace.guide, ...((patch.guide as object) ?? {}) } }; return this.getWorkspace(); }
+  getWorkspace() { return clone(this.workspace); } updateWorkspace(patch: Record<string, unknown>) { this.workspace = { ...this.workspace, ...patch, brand: { ...this.workspace.brand, ...((patch.brand as object) ?? {}) }, guide: { ...this.workspace.guide, ...((patch.guide as object) ?? {}) }, scheduling: { ...this.workspace.scheduling, ...((patch.scheduling as object) ?? {}) } }; return this.getWorkspace(); }
   listFunnels() { return clone(this.funnels); } funnelBySlug(slug: string) { return clone(this.funnels.find(f => f.slug === slug) ?? null); } funnelById(id: string) { return clone(this.funnels.find(f => f.id === id) ?? null); }
   createFunnel(value: Record<string, unknown>) { const f = { ...value, id: this.next("fn") }; this.funnels.push(f as typeof this.funnels[number]); return clone(f); } updateFunnel(id: string, patch: Record<string, unknown>) { const f = this.funnels.find(x => x.id === id); if (!f) return null; Object.assign(f, patch); return clone(f); }
   session(token: string) { return clone(this.sessions.get(token) ?? null); } saveSession(value: Record<string, unknown>) { const token = String(value.resumeToken); const old = this.sessions.get(token); const saved = { ...value, submitted: Boolean(value.submitted || old?.submitted), bookingTokenHash: value.bookingTokenHash ?? old?.bookingTokenHash, bookingContactId: value.bookingContactId ?? old?.bookingContactId, bookingExpiresAt: value.bookingExpiresAt ?? old?.bookingExpiresAt, bookingConsumedAt: value.bookingConsumedAt ?? old?.bookingConsumedAt, createdAt: old?.createdAt ?? now(), updatedAt: now() }; this.sessions.set(token, saved); return clone(saved); }
   listPipelines() { return clone(this.pipelines); } listContacts() { return clone(this.contacts); } contact(id: string) { return clone(this.contacts.find(c => c.id === id) ?? null); }
   createContact(value: Omit<Contact, "id" | "createdAt">) { const c = { ...value, id: this.next("ld"), createdAt: now() }; this.contacts.unshift(c); return clone(c); } updateContact(id: string, patch: Partial<Contact>) { const c = this.contacts.find(x => x.id === id); if (!c) return null; Object.assign(c, patch); return clone(c); }
+  contactByCalendlyEvent(eventUri: string) { if (!eventUri) return null; return clone(this.contacts.find(c => c.calendlyEventUri === eventUri) ?? null); }
+  contactByCalendlyInvitee(inviteeUri: string) { if (!inviteeUri) return null; return clone(this.contacts.find(c => c.calendlyInviteeUri === inviteeUri) ?? null); }
+  contactByEmail(email: string) { const needle = email.trim().toLowerCase(); if (!needle) return null; return clone(this.contacts.find(c => c.email.toLowerCase() === needle) ?? null); }
+  /** Index of a stage by name, or -1. Stage order is tenant-editable, so never hardcode the number. */
+  stageIndex(pipelineId: string, stageName: string) { return (this.pipelines.find(p => p.id === pipelineId)?.stages ?? []).indexOf(stageName); }
   activitiesFor(contactId: string) { return clone(this.activities.filter(a => a.contactId === contactId).sort((a,b) => b.at.localeCompare(a.at))); } addActivity(value: Omit<Activity, "id" | "at">) { const a = { ...value, id: this.next("act"), at: now() }; this.activities.unshift(a); return clone(a); }
   listMembers() { return clone(this.members); } invite(email: string, role: string) { const member = { id: this.next("m"), workspaceId: WORKSPACE_ID, name: email.split("@")[0], email, role, state: "invited" }; this.members.push(member); return clone(member); }
   toggle(pageId: string, sectionId: string, enabled: boolean) { this.cms.find(p => p.id === pageId)?.sections.find(s => s.id === sectionId) && (this.cms.find(p => p.id === pageId)!.sections.find(s => s.id === sectionId)!.enabled = enabled); }
