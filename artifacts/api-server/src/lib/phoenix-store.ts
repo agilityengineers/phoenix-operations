@@ -25,9 +25,9 @@ export type Activity = { id: string; workspaceId: string; contactId: string; typ
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const now = () => new Date().toISOString();
 const workspace = {
-  id: WORKSPACE_ID, name: "Phoenix Operations", domain: "phoenixoperations.com", type: "eos_implementer",
+  id: WORKSPACE_ID, name: "Phoenix Operations", domain: "phoenix-operations.com", type: "eos_implementer",
   status: "live", plan: "network", createdAt: "2026-01-05T00:00:00Z",
-  brand: { logoUrl: "/assets/logo.png", markUrl: "/assets/mark.png", primaryColor: "#D76C2C", inkColor: "#14263B", paperColor: "#F7F4EE", customDomain: "phoenixoperations.com" },
+  brand: { logoUrl: "/assets/logo.png", markUrl: "/assets/mark.png", primaryColor: "#D76C2C", inkColor: "#14263B", paperColor: "#F7F4EE", customDomain: "phoenix-operations.com" },
   guide: { photoUrl: "/assets/headshot.jpg", name: "Joshua Kornitsky", title: "Founder, Phoenix Operations", story: "I've built companies, led teams, worked inside large organizations, and spent decades working with hundreds of small businesses.", showGuideBand: true },
   // Non-secret scheduling config only. Credentials live in env vars — this whole
   // record is returned by GET /workspace and GET /public/workspace.
@@ -67,7 +67,7 @@ export class PhoenixStore {
   private sequences = [{ id: "seq_1", workspaceId: WORKSPACE_ID, name: "New lead follow-up", trigger: "Lead created", active: true, stat: "86%", statLabel: "open rate", steps: [{ kind: "Email", label: "Welcome" }] }];
   private webhooks = [{ id: "wh_1", workspaceId: WORKSPACE_ID, event: "lead.created", desc: "New lead notification", active: true }];
   private syncLog = [{ id: "sync_1", workspaceId: WORKSPACE_ID, at: "2026-09-01T13:14:02Z", msg: "HubSpot sync complete", state: "ok" }];
-  private subscriptions = [{ id: "sub_1", workspaceId: WORKSPACE_ID, workspaceName: "Phoenix Operations", domain: "phoenixoperations.com", plan: "network", since: "2026-01-05", amountMonthly: 499, state: "active" }];
+  private subscriptions = [{ id: "sub_1", workspaceId: WORKSPACE_ID, workspaceName: "Phoenix Operations", domain: "phoenix-operations.com", plan: "network", since: "2026-01-05", amountMonthly: 499, state: "active" }];
   private next(prefix: string) { this.counter++; return `${prefix}_${this.counter}`; }
   constructor(state?: Record<string, unknown>) {
     if (state) {

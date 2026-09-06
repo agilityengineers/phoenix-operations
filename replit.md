@@ -70,8 +70,33 @@ its own markup and CSS, so the booking step looks like the rest of the site.
 - **Calendly plan:** the Scheduling API and webhooks both require a paid Calendly plan. On the
   free tier the integration stays off and the funnel degrades to the "we'll email you" message.
 
+## Go-live order (scheduling)
+
+Two of these hard-fail if done out of order.
+
+1. **`SESSION_SECRET` first.** `index.ts` awaits `ensurePhoenixBootstrap()` *before*
+   `app.listen`, and with no admin account yet `bootstrapTokenHash()` throws without the
+   secret — so a missing secret plus no admin means the API does not boot at all, not merely
+   that auth is disabled.
+2. **`CALENDLY_PERSONAL_ACCESS_TOKEN`** — the webhook signing key cannot be obtained before it.
+3. **Deploy**, so `/api/webhooks/calendly` exists to receive deliveries.
+4. **Create the first admin.** On boot with no owner/admin, the server writes a one-time
+   `/bootstrap?token=…` URL to the *private deployment logs*, valid 60 minutes. Open it at
+   `https://<host>/bootstrap?token=…` to create the owner account.
+5. **`calendly:subscribe create --url https://<host>/api/webhooks/calendly`**, then paste the
+   printed key in as `CALENDLY_WEBHOOK_SIGNING_KEY`. Both Calendly secrets are read per
+   request, so no rebuild is needed.
+6. **Admin → Integrations**: pick the event type and switch it on. Both are required —
+   `schedulingLive` needs the token *and* `enabled` *and* `eventTypeUri`.
+
 ## Gotchas
 
+- The seeded workspace is inserted with `onConflictDoNothing()`, so editing the seed defaults
+  changes nothing for a workspace that already exists. Correcting live values (the site domain,
+  say) has to happen through the admin UI, not a deploy.
+- Saving White Label only sends `customDomain` when it actually changed. Sending it at all makes
+  `PATCH /workspace` restart DNS verification and clear the verified state, so an unrelated edit
+  would silently un-verify a working custom domain.
 - `PhoenixStore.snapshot()` enumerates its fields explicitly, so a new top-level key on the
   store will not persist unless it's added there. Scheduling config sidesteps this by living
   inside the `workspace` record.

@@ -22,7 +22,7 @@ export const WORKSPACE_ID = "ws_phoenix";
 export const seedWorkspace: Workspace = {
   id: WORKSPACE_ID,
   name: "Phoenix Operations",
-  domain: "phoenixoperations.com",
+  domain: "phoenix-operations.com",
   type: "eos_implementer",
   status: "live",
   plan: "network",
@@ -33,7 +33,7 @@ export const seedWorkspace: Workspace = {
     primaryColor: "#D76C2C",
     inkColor: "#14263B",
     paperColor: "#F7F4EE",
-    customDomain: "phoenixoperations.com",
+    customDomain: "phoenix-operations.com",
   },
   guide: {
     photoUrl: "/assets/headshot.jpg",
@@ -459,7 +459,7 @@ export const seedSyncLog: SyncLogEntry[] = [
 ];
 
 export const seedSubscriptions: Subscription[] = [
-  { id: "sub1", workspaceId: "ws_phoenix", workspaceName: "Phoenix Operations", domain: "phoenixoperations.com", plan: "network", since: "Jan 2026", amountMonthly: 399, state: "active" },
+  { id: "sub1", workspaceId: "ws_phoenix", workspaceName: "Phoenix Operations", domain: "phoenix-operations.com", plan: "network", since: "Jan 2026", amountMonthly: 399, state: "active" },
   { id: "sub2", workspaceId: "ws_bluecollar", workspaceName: "Blue Collar Ops", domain: "ops.bluecollarsuccess.com", plan: "practice", since: "Mar 2026", amountMonthly: 179, state: "active" },
   { id: "sub3", workspaceId: "ws_alcott", workspaceName: "Alcott Operations", domain: "alcottops.com", plan: "solo", since: "Aug 2026", amountMonthly: 79, state: "trial", trialDaysLeft: 9 },
 ];

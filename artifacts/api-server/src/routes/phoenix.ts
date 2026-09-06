@@ -46,7 +46,7 @@ const identity = (req: Request) => (req as Request & { phoenixSession: Session }
 const slug = (value: unknown) => typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) ? value : null;
 const customHost = (value: unknown) => {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/\.$/, "").split(":")[0];
-  const reserved = /(^|\.)(replit\.app|replit\.dev|repl\.co|replitusercontent\.com|phoenixoperations\.com)$/.test(normalized);
+  const reserved = /(^|\.)(replit\.app|replit\.dev|repl\.co|replitusercontent\.com|phoenix-operations\.com|phoenixoperations\.com)$/.test(normalized);
   const publicSuffixOnly = /^(com|org|net|edu|gov|io|co|app|dev|co\.uk)$/.test(normalized);
   return !reserved && !publicSuffixOnly && normalized !== "localhost" && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalized) && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(normalized) ? normalized : null;
 };
