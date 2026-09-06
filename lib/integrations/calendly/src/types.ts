@@ -96,3 +96,21 @@ export interface CalendlyWebhookEvent {
     tracking?: Record<string, string | undefined>;
   };
 }
+
+export interface CalendlyWebhookSubscription {
+  uri: string;
+  /** Where Calendly POSTs — must be this deployment's /api/webhooks/calendly. */
+  callbackUrl: string;
+  events: string[];
+  state: string;
+  scope: string;
+  createdAt?: string;
+}
+
+export interface CalendlyWebhookCreated extends CalendlyWebhookSubscription {
+  /**
+   * Returned once, at creation. Calendly never shows it again — it goes straight
+   * into the secrets vault as CALENDLY_WEBHOOK_SIGNING_KEY.
+   */
+  signingKey: string;
+}

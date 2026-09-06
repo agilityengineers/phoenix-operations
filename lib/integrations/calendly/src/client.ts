@@ -5,6 +5,8 @@ import type {
   CalendlyEventType,
   CalendlyResult,
   CalendlyUser,
+  CalendlyWebhookCreated,
+  CalendlyWebhookSubscription,
   CreateInviteeInput,
 } from "./types";
 
@@ -230,3 +232,74 @@ export const createInvitee = (input: CreateInviteeInput): Promise<CalendlyResult
       };
     },
   );
+
+// ── Webhook subscriptions ────────────────────────────────────────────────────
+// Calendly has no UI for these; they exist only through the API, and the signing
+// key is returned once when a subscription is created. Driven by
+// scripts/src/calendly-subscribe.ts.
+
+const WEBHOOK_EVENTS = ["invitee.created", "invitee.canceled"];
+
+const parseSubscription = (raw: Json): CalendlyWebhookSubscription | null => {
+  const uri = str(raw.uri);
+  if (!uri) return null;
+  return {
+    uri,
+    callbackUrl: str(raw.callback_url) ?? "",
+    events: Array.isArray(raw.events) ? raw.events.filter((e): e is string => typeof e === "string") : [],
+    state: str(raw.state) ?? "unknown",
+    scope: str(raw.scope) ?? "",
+    createdAt: str(raw.created_at),
+  };
+};
+
+/** Existing subscriptions for a user, so we can see whether one already points here. */
+export const listWebhookSubscriptions = (
+  userUri: string,
+  organizationUri: string,
+): Promise<CalendlyResult<CalendlyWebhookSubscription[]>> =>
+  call(
+    "/webhook_subscriptions",
+    { query: { scope: "user", user: userUri, organization: organizationUri, count: "100" } },
+    (body) => {
+      const collection = body.collection;
+      if (!Array.isArray(collection)) return null;
+      return collection.flatMap((raw) => {
+        const parsed = parseSubscription(raw as Json);
+        return parsed ? [parsed] : [];
+      });
+    },
+  );
+
+/** Creates the subscription and returns the signing key — the only time it is available. */
+export const createWebhookSubscription = (
+  callbackUrl: string,
+  userUri: string,
+  organizationUri: string,
+): Promise<CalendlyResult<CalendlyWebhookCreated>> =>
+  call(
+    "/webhook_subscriptions",
+    {
+      method: "POST",
+      body: {
+        url: callbackUrl,
+        events: WEBHOOK_EVENTS,
+        organization: organizationUri,
+        user: userUri,
+        scope: "user",
+      },
+    },
+    (body) => {
+      const resource = (body.resource as Json | undefined) ?? body;
+      const parsed = parseSubscription(resource);
+      const signingKey = str(resource.signing_key);
+      if (!parsed || !signingKey) return null;
+      return { ...parsed, signingKey };
+    },
+  );
+
+/** Removes a subscription — typically one left pointing at a dead preview host. */
+export const deleteWebhookSubscription = (uuidOrUri: string): Promise<CalendlyResult<true>> => {
+  const uuid = uuidOrUri.split("/").pop() ?? uuidOrUri;
+  return call(`/webhook_subscriptions/${encodeURIComponent(uuid)}`, { method: "DELETE" }, () => true);
+};

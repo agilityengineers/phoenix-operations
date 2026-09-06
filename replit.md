@@ -10,6 +10,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/scripts run test:calendly` — check the Calendly webhook signature verifier and slot formatters (no network, no credentials)
+- `pnpm --filter @workspace/scripts run calendly:subscribe` — list Calendly webhook subscriptions; `create --url https://<host>/api/webhooks/calendly` sets one up and prints the signing key, `delete <uuid>` removes one. Needs `CALENDLY_PERSONAL_ACCESS_TOKEN`.
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `SESSION_SECRET` — signs session cookies and the single-use booking/reset/invite capability tokens. Auth, intake submission and booking all return 503 without it; there is deliberately no fallback, because a guessable secret would make those tokens forgeable.
 - Optional env (scheduling): `CALENDLY_PERSONAL_ACCESS_TOKEN`, `CALENDLY_WEBHOOK_SIGNING_KEY`. Without them the funnel still captures and scores leads, and the scheduler shows a "we'll email you" message instead of times. Set both in Replit Secrets, never in the repo.
@@ -58,6 +59,11 @@ its own markup and CSS, so the booking step looks like the rest of the site.
 - Reconciliation: `POST /api/webhooks/calendly` (`invitee.created`, `invitee.canceled`) is the
   authoritative record — it's what catches cancellations and reschedules. Mounted outside the
   session/CSRF middleware because its authentication *is* the HMAC signature.
+- The subscription behind that webhook is created with the `calendly:subscribe` script above.
+  Calendly has no UI for subscriptions, and the signing key is returned **once**, at creation —
+  so get the access token in place first, then run `create`, then paste the key into the vault.
+  Re-run `list` after the deployment host changes; a subscription pointing at a dead preview
+  URL silently stops reconciling.
 - Which event type gets booked is set per workspace in Admin → Integrations. Only non-secret
   scheduling config lives in the workspace record; credentials stay in env vars, because
   `GET /workspace` returns that record wholesale.

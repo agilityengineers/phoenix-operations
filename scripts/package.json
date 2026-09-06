@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "calendly:subscribe": "tsx ./src/calendly-subscribe.ts",
     "hello": "tsx ./src/hello.ts",
     "test:calendly": "tsx ./src/calendly-checks.ts",
     "test:phoenix-regression": "bash ./src/phoenix-regression.sh",
