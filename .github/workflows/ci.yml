@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same PR makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, build and checks
+    runs-on: ubuntu-latest
+    # Nothing here needs credentials — no Calendly token, no database. Keep it
+    # that way so the workflow stays safe to run on pull requests from forks.
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 10 specifically. pnpm 12 rejects this workspace with
+      # ERR_PNPM_IGNORED_BUILDS over esbuild despite onlyBuiltDependencies
+      # listing it, and pnpm 9 can't read `overrides` from pnpm-workspace.yaml
+      # so it fails with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH. Both verified.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      # Matches `modules = ["nodejs-24", ...]` in .replit, so CI runs the
+      # runtime production runs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # --frozen-lockfile so a lockfile that drifted from the manifests fails
+      # here rather than resolving to something nobody committed. It also keeps
+      # the minimumReleaseAge supply-chain policy in pnpm-workspace.yaml intact.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build
+
+      # Webhook signature verification and the slot formatters. No network and
+      # no credentials, so this is the one part of the Calendly integration that
+      # can be proven on every PR.
+      - name: Calendly checks
+        run: pnpm --filter @workspace/scripts run test:calendly
