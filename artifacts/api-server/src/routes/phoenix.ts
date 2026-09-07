@@ -8,6 +8,7 @@ import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigur
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
 import { bootstrapTokenHash } from "../lib/phoenix-bootstrap";
+import { sendAdminInvitationEmail } from "../lib/phoenix-email";
 
 const router: IRouter = Router();
 const scryptAsync = promisify(scrypt);
@@ -211,7 +212,45 @@ router.get("/scheduling/event-types", async (_req, res) => {
 });
 
 router.patch("/workspace", async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) }, scheduling: { ...current.scheduling, ...schedulingPatch(b.scheduling) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });
-router.post("/members/invite", async (req, res) => { const email = String(body(req).email ?? "").trim().toLowerCase(), requestedRole = String(body(req).role), role = ["admin", "owner", "staff", "partner"].includes(requestedRole) ? requestedRole : null; if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" }); if (!role) return res.status(400).json({ error: "invalid_role" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "invites_unavailable" }); const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixUserInvites).values({ id: `inv_${randomUUID()}`, tokenHash, workspaceId: identity(req).workspaceId, email, role, expiresAt: new Date(Date.now() + 7 * 86400_000) }); const member = await mutatePhoenixStore(identity(req).workspaceId, store => store.invite(email, role)); res.json({ member, invitePath: `/signup?invite=${encodeURIComponent(token)}` }); });
+router.post("/members/invite", async (req, res) => {
+  const email = String(body(req).email ?? "").trim().toLowerCase();
+  const requestedRole = String(body(req).role);
+  const role = ["admin", "owner", "staff", "partner"].includes(requestedRole) ? requestedRole : null;
+  if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" });
+  if (!role) return res.status(400).json({ error: "invalid_role" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
+
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = capabilityHash(token, secret);
+  const expiresAt = new Date(Date.now() + 7 * 86400_000);
+  await db.insert(phoenixUserInvites).values({
+    id: `inv_${randomUUID()}`,
+    tokenHash,
+    workspaceId: identity(req).workspaceId,
+    email,
+    role,
+    expiresAt,
+  });
+  const store = await tenantStore(req);
+  const workspace = store.getWorkspace();
+  const member = await mutatePhoenixStore(identity(req).workspaceId, current => current.invite(email, role));
+  const invitePath = `/signup?invite=${encodeURIComponent(token)}`;
+  const delivery = await sendAdminInvitationEmail({
+    to: email,
+    role,
+    inviteUrl: new URL(invitePath, siteUrl(req)).toString(),
+    expiresAt,
+    workspaceName: workspace.name,
+    inviterName: identity(req).email,
+    brand: workspace.brand,
+    siteUrl: siteUrl(req),
+  });
+  if (delivery.status === "failed") {
+    req.log.warn({ reason: delivery.reason, workspaceId: identity(req).workspaceId }, "Admin invitation email delivery failed");
+  }
+  res.json({ member, invitePath, expiresAt, delivery });
+});
 router.post("/cms/toggle", async (req, res) => { const b = body(req); if (!b.pageId || !b.sectionId) return res.status(400).json({ error: "missing_fields" }); await mutatePhoenixStore(identity(req).workspaceId, store => store.toggle(String(b.pageId), String(b.sectionId), Boolean(b.enabled))); res.json({ ok: true }); });
 router.patch("/funnels/:id", async (req, res) => { const b = body(req), allowed = ["name", "slug", "segment", "offer", "status", "storybrand", "variants", "blocks", "weights"], funnel = await mutatePhoenixStore(identity(req).workspaceId, store => store.updateFunnel(req.params.id, Object.fromEntries(allowed.filter(k => b[k] !== undefined).map(k => [k, b[k]])))); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.post("/funnels/:id", async (req, res) => { if (req.params.id !== "new") return res.status(405).json({ error: "use_patch" }); const b = body(req), funnelSlug = String(b.slug ?? "").replace(/[^a-z0-9-]/g, ""); if (!funnelSlug) return res.status(400).json({ error: "slug_required" }); const funnel = await mutatePhoenixStore(identity(req).workspaceId, store => { if (store.funnelBySlug(funnelSlug)) return null; return store.createFunnel({ ...b, id: undefined, workspaceId: identity(req).workspaceId, name: String(b.name || "New funnel"), slug: funnelSlug, status: "draft", variants: Array.isArray(b.variants) && b.variants.length ? b.variants : [{ id: "A", label: "A", headline: "", trafficPct: 100 }], stats: { visits: 0, leads: 0, cvr: "—" } }); }); if (!funnel) return res.status(409).json({ error: "slug_taken" }); res.json({ funnel }); });

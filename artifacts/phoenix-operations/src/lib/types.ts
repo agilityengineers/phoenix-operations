@@ -60,6 +60,11 @@ export interface Member {
   role: Role;
   state: "active" | "invited";
   invitePath?: string;
+  inviteExpiresAt?: string;
+  inviteDelivery?: {
+    status: "sent" | "failed";
+    reason?: "email_not_configured" | "provider_rejected" | "provider_unavailable";
+  };
 }
 
 export interface StoryBrand {

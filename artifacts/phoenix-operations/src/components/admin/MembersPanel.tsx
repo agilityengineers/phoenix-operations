@@ -33,13 +33,24 @@ function MembersPanel({ initialMembers }: { initialMembers: Member[] }) {
     try {
       const member = await getStore().inviteMember(email, requestedRole as Member["role"]);
       setMembers((m) => [...m, member]);
+      if (member.inviteDelivery?.status === "sent") {
+        const expires = member.inviteExpiresAt
+          ? new Date(member.inviteExpiresAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+          : "7 days";
+        alert(`Invitation emailed to ${email} with the ${requestedRole} role. It expires ${expires}.`);
+        return;
+      }
       if (member.invitePath) {
         const inviteUrl = new URL(member.invitePath, window.location.origin).toString();
+        const reason =
+          member.inviteDelivery?.reason === "email_not_configured"
+            ? "Email delivery is not configured."
+            : "The email could not be delivered.";
         try {
           await navigator.clipboard.writeText(inviteUrl);
-          alert(`The ${requestedRole} invitation link was copied to your clipboard.`);
+          alert(`${reason} The reusable ${requestedRole} invitation link was copied to your clipboard.`);
         } catch {
-          prompt(`Share this ${requestedRole} invitation link:`, inviteUrl);
+          prompt(`${reason} Share this reusable ${requestedRole} invitation link:`, inviteUrl);
         }
       }
     } catch (error) {
