@@ -16,6 +16,18 @@ _Replace the heading above with the project's name, and this line with one sente
 - Optional env (scheduling): `CALENDLY_PERSONAL_ACCESS_TOKEN`, `CALENDLY_WEBHOOK_SIGNING_KEY`. Without them the funnel still captures and scores leads, and the scheduler shows a "we'll email you" message instead of times. Set both in Replit Secrets, never in the repo.
 - Escape hatches, rarely needed: `CALENDLY_API_BASE` (point the client at a stub for local testing) and `CALENDLY_CREATE_INVITEE_PATH` (override the Scheduling API path if the account's API disagrees).
 
+## CI
+
+`.github/workflows/ci.yml` runs install, `typecheck`, `build` and `test:calendly` on every pull
+request and on pushes to `main`. It needs no secrets — none of those steps touch Calendly or the
+database — so it is safe on fork pull requests.
+
+**Use pnpm 10 (pinned to 10.15.1).** Not a preference: pnpm 12 fails this workspace with
+`ERR_PNPM_IGNORED_BUILDS` over esbuild even though `onlyBuiltDependencies` lists it, and pnpm 9
+can't read `overrides` from `pnpm-workspace.yaml` so it fails with
+`ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Both were verified against a clean tree. If you upgrade,
+check a clean `pnpm install --frozen-lockfile` still exits 0 first.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
