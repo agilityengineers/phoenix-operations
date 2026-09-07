@@ -72,7 +72,8 @@ its own markup and CSS, so the booking step looks like the rest of the site.
   authoritative record — it's what catches cancellations and reschedules. Mounted outside the
   session/CSRF middleware because its authentication *is* the HMAC signature.
 - The subscription behind that webhook is created with the `calendly:subscribe` script above.
-  Calendly has no UI for subscriptions, and the signing key is returned **once**, at creation —
+  Calendly has no UI for subscriptions. For personal-access-token subscriptions, the helper
+  generates the signing key, sends it to Calendly during creation, and prints it **once** —
   so get the access token in place first, then run `create`, then paste the key into the vault.
   Re-run `list` after the deployment host changes; a subscription pointing at a dead preview
   URL silently stops reconciling.

@@ -2,7 +2,8 @@
 // cancellations and reschedules.
 //
 // Calendly has no UI for webhook subscriptions — they exist only through the API,
-// and the signing key is shown exactly once, when the subscription is created.
+// The helper generates the signing key, sends it to Calendly when creating the
+// subscription, and shows it exactly once so it can be stored in Replit Secrets.
 // That key is what the server needs as CALENDLY_WEBHOOK_SIGNING_KEY.
 //
 //   pnpm --filter @workspace/scripts run calendly:subscribe            # list (read-only)
@@ -103,7 +104,7 @@ if (command === "create") {
   console.log(`\n✓ Subscribed ${created.data.callbackUrl}`);
   console.log(`  events: ${created.data.events.join(", ")}`);
   console.log("\n  Put this in the secrets vault as CALENDLY_WEBHOOK_SIGNING_KEY.");
-  console.log("  Calendly will not show it again:\n");
+  console.log("  This helper will not show it again:\n");
   console.log(`    ${created.data.signingKey}\n`);
   process.exit(0);
 }

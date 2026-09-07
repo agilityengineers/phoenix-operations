@@ -109,8 +109,8 @@ export interface CalendlyWebhookSubscription {
 
 export interface CalendlyWebhookCreated extends CalendlyWebhookSubscription {
   /**
-   * Returned once, at creation. Calendly never shows it again — it goes straight
-   * into the secrets vault as CALENDLY_WEBHOOK_SIGNING_KEY.
+   * Generated locally and submitted when the subscription is created. Calendly
+   * does not return it later, so it goes straight into the secrets vault.
    */
   signingKey: string;
 }

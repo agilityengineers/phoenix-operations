@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type {
   CalendlyAvailableTime,
   CalendlyBooking,
@@ -276,8 +277,11 @@ export const createWebhookSubscription = (
   callbackUrl: string,
   userUri: string,
   organizationUri: string,
-): Promise<CalendlyResult<CalendlyWebhookCreated>> =>
-  call(
+): Promise<CalendlyResult<CalendlyWebhookCreated>> => {
+  // Personal-access-token subscriptions require the caller to provide the
+  // shared signing key. Calendly stores it but does not return it later.
+  const signingKey = randomBytes(32).toString("hex");
+  return call(
     "/webhook_subscriptions",
     {
       method: "POST",
@@ -287,16 +291,17 @@ export const createWebhookSubscription = (
         organization: organizationUri,
         user: userUri,
         scope: "user",
+        signing_key: signingKey,
       },
     },
     (body) => {
       const resource = (body.resource as Json | undefined) ?? body;
       const parsed = parseSubscription(resource);
-      const signingKey = str(resource.signing_key);
-      if (!parsed || !signingKey) return null;
+      if (!parsed) return null;
       return { ...parsed, signingKey };
     },
   );
+};
 
 /** Removes a subscription — typically one left pointing at a dead preview host. */
 export const deleteWebhookSubscription = (uuidOrUri: string): Promise<CalendlyResult<true>> => {
