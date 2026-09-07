@@ -97,7 +97,14 @@ export class PhoenixStore {
   /** Index of a stage by name, or -1. Stage order is tenant-editable, so never hardcode the number. */
   stageIndex(pipelineId: string, stageName: string) { return (this.pipelines.find(p => p.id === pipelineId)?.stages ?? []).indexOf(stageName); }
   activitiesFor(contactId: string) { return clone(this.activities.filter(a => a.contactId === contactId).sort((a,b) => b.at.localeCompare(a.at))); } addActivity(value: Omit<Activity, "id" | "at">) { const a = { ...value, id: this.next("act"), at: now() }; this.activities.unshift(a); return clone(a); }
-  listMembers() { return clone(this.members); } invite(email: string, role: string) { const member = { id: this.next("m"), workspaceId: WORKSPACE_ID, name: email.split("@")[0], email, role, state: "invited" }; this.members.push(member); return clone(member); }
+  listMembers() { return clone(this.members); }
+  invite(email: string, role: string, workspaceId = this.workspace.id) { const member = { id: this.next("m"), workspaceId, name: email.split("@")[0], email, role, state: "invited" }; this.members.push(member); return clone(member); }
+  acceptInvite(email: string, name: string, role: string, workspaceId = this.workspace.id) {
+    const member = this.members.find(value => value.email.toLowerCase() === email.toLowerCase() && value.state === "invited");
+    if (member) Object.assign(member, { workspaceId, name, role, state: "active" });
+    else this.members.push({ id: this.next("m"), workspaceId, name, email, role, state: "active" });
+    return clone(member ?? this.members[this.members.length - 1]);
+  }
   toggle(pageId: string, sectionId: string, enabled: boolean) { this.cms.find(p => p.id === pageId)?.sections.find(s => s.id === sectionId) && (this.cms.find(p => p.id === pageId)!.sections.find(s => s.id === sectionId)!.enabled = enabled); }
   listCms() { return clone(this.cms); }
   listPartners() { return clone(this.partners); }

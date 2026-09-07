@@ -1,1 +1,2 @@
 - [Deployment host routing](deployment-host-routing.md) — Replit-attached custom domains are platform hosts; resolve them from REPLIT_DOMAINS before tenant-subdomain logic.
+- [Nested admin auth redirects](nested-admin-auth-redirects.md) — use a base-aware location replacement at the admin session boundary; nested Wouter navigation can stall.

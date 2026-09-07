@@ -16,6 +16,14 @@ export default function LoginPage() {
     try {
       const response = await fetch("/api/auth/login", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) });
       if (!response.ok) throw new Error("Invalid email or password.");
+      const session = await response.json() as {
+        user?: { role?: string };
+        workspace?: { id?: string };
+      };
+      if (!session.user?.role || !session.workspace?.id) {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        throw new Error("Your account does not have valid workspace access.");
+      }
       setLocation("/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");

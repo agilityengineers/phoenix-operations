@@ -126,19 +126,39 @@ router.post("/auth/signup", async (req, res) => {
   if (b.customDomain !== undefined && !pendingCustomDomain) return res.status(400).json({ error: "invalid_custom_domain" });
   const inviteToken = String(b.inviteToken ?? ""), inviteHash = inviteToken ? createHmac("sha256", process.env.SESSION_SECRET).update(inviteToken).digest("hex") : "";
   const [invite] = inviteToken ? await db.select().from(phoenixUserInvites).where(and(eq(phoenixUserInvites.tokenHash, inviteHash), gt(phoenixUserInvites.expiresAt, new Date()), isNull(phoenixUserInvites.usedAt))).limit(1) : [];
+  if (inviteToken && !invite) return res.status(400).json({ error: "invalid_or_expired_invite" });
   if (!invite && !requestedSlug) return res.status(400).json({ error: "valid_subdomain_required" });
   if (invite && invite.email !== email) return res.status(403).json({ error: "invite_email_mismatch" });
   const workspaceId = invite?.workspaceId ?? `ws_${randomUUID()}`, template = await getPhoenixStore(WORKSPACE_ID, true), name = String(b.name).trim(), brandName = String(b.brandName ?? "").trim() || name;
   if (!template) throw new Error("public_workspace_unavailable");
+  const passwordRecord = await hashPassword(password), user = { id: `usr_${randomUUID()}`, email, workspaceId, name, role: invite?.role ?? "owner" };
+  if (invite) {
+    const accepted = await db.transaction(async tx => {
+      const locked = await tx.execute(sql`SELECT id, workspace_id, email, role FROM phoenix_user_invites WHERE id = ${invite.id} AND used_at IS NULL AND expires_at > now() FOR UPDATE`);
+      const current = locked.rows[0] as { id: string; workspace_id: string; email: string; role: string } | undefined;
+      if (!current) return null;
+      if (current.email !== email) return "email_mismatch" as const;
+      const [workspace] = await tx.select().from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, current.workspace_id)).limit(1);
+      if (!workspace) return "workspace_missing" as const;
+      const invitedUser = { ...user, workspaceId: current.workspace_id, role: current.role };
+      const workspaceStore = new PhoenixStore(workspace.state as Record<string, unknown>);
+      workspaceStore.acceptInvite(email, name, current.role, current.workspace_id);
+      await tx.insert(phoenixUsers).values({ ...invitedUser, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
+      await tx.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, current.id));
+      await tx.update(phoenixWorkspaces).set({ state: workspaceStore.snapshot(), updatedAt: new Date() }).where(eq(phoenixWorkspaces.id, current.workspace_id));
+      return { user: invitedUser, workspace: workspaceStore.getWorkspace() };
+    });
+    if (!accepted) return res.status(400).json({ error: "invalid_or_expired_invite" });
+    if (accepted === "email_mismatch") return res.status(403).json({ error: "invite_email_mismatch" });
+    if (accepted === "workspace_missing") return res.status(410).json({ error: "invited_workspace_unavailable" });
+    setSession(res, accepted.user);
+    return res.status(201).json({ user: { email, name, role: accepted.user.role }, workspace: { id: accepted.user.workspaceId, name: accepted.workspace.name }, domain: { state: "none" } });
+  }
   const store = template;
   const workspace = store.getWorkspace(); store.updateWorkspace({ id: workspaceId, name: brandName, domain: String(b.subdomain ?? "").trim() || workspace.domain, type: String(b.practiceType ?? workspace.type), brand: { ...workspace.brand, customDomain: "" }, guide: { ...workspace.guide, name } });
-  const passwordRecord = await hashPassword(password), user = { id: `usr_${randomUUID()}`, email, workspaceId, name, role: invite?.role ?? "owner" };
-  if (!invite) {
-    try { await db.insert(phoenixWorkspaces).values({ id: workspaceId, slug: requestedSlug!, pendingCustomDomain, domainVerificationToken, state: store.snapshot(), isPublic: true }); }
-    catch { return res.status(409).json({ error: "subdomain_taken" }); }
-  }
+  try { await db.insert(phoenixWorkspaces).values({ id: workspaceId, slug: requestedSlug!, pendingCustomDomain, domainVerificationToken, state: store.snapshot(), isPublic: true }); }
+  catch { return res.status(409).json({ error: "subdomain_taken" }); }
   await db.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
-  if (invite) await db.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, invite.id));
   setSession(res, user); res.status(201).json({ user: { email, name, role: user.role }, workspace: { id: workspaceId, name: brandName }, domain: pendingCustomDomain ? { state: "pending", domain: pendingCustomDomain, txtName: `_phoenix-verification.${pendingCustomDomain}`, txtValue: domainVerificationToken } : { state: "none" } });
 });
 router.post("/auth/login", async (req, res) => {
@@ -146,9 +166,9 @@ router.post("/auth/login", async (req, res) => {
   const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
   if (!user || !(await passwordMatches(password, user.passwordSalt, user.passwordHash))) return res.status(401).json({ error: "invalid_credentials" });
   if (!setSession(res, user)) return res.status(503).json({ error: "auth_unavailable" });
-  res.json({ user: { email: user.email, name: user.name } });
+  res.json({ user: { email: user.email, name: user.name, role: user.role }, workspace: { id: user.workspaceId } });
 });
-router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user || user.workspaceId !== value.workspaceId) return res.status(401).json({ error: "unauthorized" }); res.json({ user: { email: user.email, name: user.name, role: user.role } }); });
+router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user || user.workspaceId !== value.workspaceId) return res.status(401).json({ error: "unauthorized" }); res.json({ user: { email: user.email, name: user.name, role: user.role }, workspace: { id: user.workspaceId } }); });
 router.post("/auth/logout", (_req, res) => res.clearCookie("po_session", { path: "/" }).json({ ok: true }));
 router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
 router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const tokenHash = capabilityHash(token, secret); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
@@ -224,17 +244,18 @@ router.post("/members/invite", async (req, res) => {
   const token = randomBytes(32).toString("base64url");
   const tokenHash = capabilityHash(token, secret);
   const expiresAt = new Date(Date.now() + 7 * 86400_000);
+  const workspaceId = identity(req).workspaceId;
   await db.insert(phoenixUserInvites).values({
     id: `inv_${randomUUID()}`,
     tokenHash,
-    workspaceId: identity(req).workspaceId,
+    workspaceId,
     email,
     role,
     expiresAt,
   });
   const store = await tenantStore(req);
   const workspace = store.getWorkspace();
-  const member = await mutatePhoenixStore(identity(req).workspaceId, current => current.invite(email, role));
+  const member = await mutatePhoenixStore(workspaceId, current => current.invite(email, role, workspaceId));
   const invitePath = `/signup?invite=${encodeURIComponent(token)}`;
   const delivery = await sendAdminInvitationEmail({
     to: email,
@@ -247,7 +268,7 @@ router.post("/members/invite", async (req, res) => {
     siteUrl: siteUrl(req),
   });
   if (delivery.status === "failed") {
-    req.log.warn({ reason: delivery.reason, workspaceId: identity(req).workspaceId }, "Admin invitation email delivery failed");
+    req.log.warn({ reason: delivery.reason, workspaceId }, "Admin invitation email delivery failed");
   }
   res.json({ member, invitePath, expiresAt, delivery });
 });

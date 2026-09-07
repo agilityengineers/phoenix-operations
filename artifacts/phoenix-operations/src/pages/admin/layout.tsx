@@ -5,6 +5,11 @@ import AdminNav from "@/components/admin/AdminNav";
 import { getStore } from "@/lib/store";
 import { Loader2 } from "lucide-react";
 
+type AuthSession = {
+  user: { email: string; name: string; role: string };
+  workspace: { id: string };
+};
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { data: session, isLoading: sessionLoading } = useQuery({
@@ -12,10 +17,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     queryFn: async () => {
       const response = await fetch("/api/auth/session", { credentials: "include" });
       if (!response.ok) return null;
-      return response.json() as Promise<{ user: { email: string; name: string; role: string } }>;
+      return response.json() as Promise<AuthSession>;
     },
+    retry: false,
   });
-  useEffect(() => { if (!sessionLoading && !session) setLocation("/login"); }, [session, sessionLoading, setLocation]);
+  useEffect(() => {
+    if (!sessionLoading && !session) {
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      window.location.replace(`${base}/admin/login`);
+    }
+  }, [session, sessionLoading]);
 
   const { data: workspace, isLoading } = useQuery({
     queryKey: ["workspace"],
