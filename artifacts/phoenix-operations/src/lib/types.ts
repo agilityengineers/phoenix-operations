@@ -59,6 +59,7 @@ export interface Member {
   email: string;
   role: Role;
   state: "active" | "invited";
+  invitePath?: string;
 }
 
 export interface StoryBrand {

@@ -44,7 +44,10 @@ export class ApiStore implements DataStore {
   async updateWorkspace(patch: Partial<Workspace>) { return (await request<{ workspace: Workspace }>("/workspace", json("PATCH", patch))).workspace; }
   async listPartnerWorkspaces() { return (await request<{ workspaces: Workspace[] }>("/partners")).workspaces; }
   async listMembers() { return (await request<{ members: Member[] }>("/members")).members; }
-  async inviteMember(email: string, role: Member["role"]) { return (await request<{ member: Member }>("/members/invite", json("POST", { email, role }))).member; }
+  async inviteMember(email: string, role: Member["role"]) {
+    const result = await request<{ member: Member; invitePath: string }>("/members/invite", json("POST", { email, role }));
+    return { ...result.member, invitePath: result.invitePath };
+  }
   async listFunnels() { return (await request<{ funnels: Funnel[] }>("/funnels")).funnels; }
   async getFunnelBySlug(slug: string) { try { return (await request<{ funnel: Funnel }>(`/public/funnels/${encodeURIComponent(slug)}`)).funnel; } catch { return null; } }
   async getFunnelById(id: string) { try { return (await request<{ funnel: Funnel }>(`/funnels/${encodeURIComponent(id)}`)).funnel; } catch { return null; } }

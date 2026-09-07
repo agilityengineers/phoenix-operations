@@ -22,9 +22,29 @@ function MembersPanel({ initialMembers }: { initialMembers: Member[] }) {
   const invite = useCallback(async () => {
     const email = prompt("Invite by email:");
     if (!email || !/.+@.+\..+/.test(email)) return;
-    
-    const member = await getStore().inviteMember(email, "staff");
-    setMembers((m) => [...m, member]);
+
+    const requestedRole = prompt("Role: admin, owner, staff, or partner", "staff")?.trim().toLowerCase();
+    if (!requestedRole) return;
+    if (!["admin", "owner", "staff", "partner"].includes(requestedRole)) {
+      alert("Please choose admin, owner, staff, or partner.");
+      return;
+    }
+
+    try {
+      const member = await getStore().inviteMember(email, requestedRole as Member["role"]);
+      setMembers((m) => [...m, member]);
+      if (member.invitePath) {
+        const inviteUrl = new URL(member.invitePath, window.location.origin).toString();
+        try {
+          await navigator.clipboard.writeText(inviteUrl);
+          alert(`The ${requestedRole} invitation link was copied to your clipboard.`);
+        } catch {
+          prompt(`Share this ${requestedRole} invitation link:`, inviteUrl);
+        }
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to invite this user.");
+    }
   }, []);
 
   useEffect(() => {

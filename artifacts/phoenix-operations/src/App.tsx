@@ -50,6 +50,7 @@ function Router() {
         <Route path="/signup" component={SignupPage} />
         <Route path="/reset" component={ResetPage} />
         <Route path="/bootstrap" component={BootstrapPage} />
+        <Route path="/admin/login" component={LoginPage} />
 
         {/* Funnel route */}
         <Route path="/f/:slug" component={FunnelPage} />

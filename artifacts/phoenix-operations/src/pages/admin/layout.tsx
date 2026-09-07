@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     queryFn: async () => {
       const response = await fetch("/api/auth/session", { credentials: "include" });
       if (!response.ok) return null;
-      return response.json() as Promise<{ user: { email: string } }>;
+      return response.json() as Promise<{ user: { email: string; name: string; role: string } }>;
     },
   });
   useEffect(() => { if (!sessionLoading && !session) setLocation("/login"); }, [session, sessionLoading, setLocation]);
@@ -20,13 +20,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { data: workspace, isLoading } = useQuery({
     queryKey: ["workspace"],
     queryFn: () => getStore().getWorkspace(),
+    enabled: Boolean(session),
   });
 
   if (isLoading || sessionLoading) {
     return <div className="adm-shell items-center justify-center"><Loader2 className="animate-spin text-orange-500 w-8 h-8" /></div>;
   }
 
-  if (!workspace || !session) return null;
+  if (!session) {
+    return (
+      <div className="adm-shell items-center justify-center">
+        <div className="text-sm text-slate-600">Redirecting to sign in…</div>
+      </div>
+    );
+  }
+
+  if (!workspace) {
+    return (
+      <div className="adm-shell items-center justify-center">
+        <div className="text-center">
+          <p className="font-medium text-slate-900">Workspace unavailable</p>
+          <button type="button" className="adm-btn mt-4" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setLocation("/login");
@@ -46,8 +66,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="adm-user">
           <img src={workspace.guide.photoUrl} alt="" width={34} height={34} style={{ borderRadius: '50%' }} />
           <div>
-            <div className="name">{workspace.guide.name.split(" ")[0]} K.</div>
-            <div className="role">Owner</div>
+            <div className="name">{session.user.name}</div>
+            <div className="role">{session.user.role.charAt(0).toUpperCase() + session.user.role.slice(1)}</div>
           </div>
         </div>
         <Link href="/" className="adm-viewsite">

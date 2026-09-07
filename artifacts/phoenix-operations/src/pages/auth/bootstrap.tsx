@@ -25,7 +25,7 @@ export default function BootstrapPage() {
     <label className="field">Bootstrap token<input value={token} onChange={e => setToken(e.target.value)} autoComplete="off" /></label>
     <label className="field">Name<input value={name} onChange={e => setName(e.target.value)} autoComplete="name" /></label>
     <label className="field">Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></label>
-    <label className="field">Strong password<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" placeholder="12+ characters, upper/lowercase and number" /></label>
+    <label className="field">Strong password<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" placeholder="8+ characters, upper/lowercase and number" /></label>
     {error && <div className="auth-error">{error}</div>}
     <button type="button" className="signup-next" disabled={busy} onClick={submit}>{busy ? "Provisioning…" : "Create owner"}</button>
   </div></AuthShell>;

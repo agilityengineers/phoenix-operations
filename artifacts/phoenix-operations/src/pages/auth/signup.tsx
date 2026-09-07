@@ -17,6 +17,7 @@ const PLANS = [
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
+  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "",
@@ -36,10 +37,34 @@ export default function SignupPage() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
+  const createAccount = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, ...(inviteToken ? { inviteToken } : {}) }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Unable to create workspace." }))).error);
+      setDone(true);
+      setLocation("/admin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create workspace.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const next = async () => {
     if (step === 1) {
       if (!form.name.trim() || !/.+@.+\..+/.test(form.email) || form.password.length < 8) {
         setError("Name, a valid email, and a password of 8+ characters are required.");
+        return;
+      }
+      if (inviteToken) {
+        await createAccount();
         return;
       }
       setStep(2);
@@ -54,23 +79,7 @@ export default function SignupPage() {
       return;
     }
     // Create the account first; billing can be configured separately.
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/auth/signup", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Unable to create workspace." }))).error);
-      setDone(true);
-      setLocation("/admin");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create workspace.");
-    } finally {
-      setBusy(false);
-    }
+    await createAccount();
   };
 
   return (
@@ -78,16 +87,17 @@ export default function SignupPage() {
       <div className="auth-card wide">
         <div className="signup-head">
           <div>
-            <h1 style={{ margin: 0 }}>Create your partner workspace</h1>
+            <h1 style={{ margin: 0 }}>{inviteToken ? "Accept your workspace invitation" : "Create your partner workspace"}</h1>
             <p className="auth-sub">
-               Start a workspace for your white-labeled funnels, CRM, and guide page. No invite
-               code is required.
+              {inviteToken
+                ? "Create your account to join the workspace with the role selected by its administrator."
+                : "Start a workspace for your white-labeled funnels, CRM, and guide page. No invite code is required."}
             </p>
           </div>
-          <span className="signup-step">Step {step} of 3</span>
+          <span className="signup-step">Step {step} of {inviteToken ? 1 : 3}</span>
         </div>
         <div className="signup-progress">
-          <div style={{ width: `${step * 33.4}%` }} />
+          <div style={{ width: inviteToken ? "100%" : `${step * 33.4}%` }} />
         </div>
 
         {step === 1 && (
