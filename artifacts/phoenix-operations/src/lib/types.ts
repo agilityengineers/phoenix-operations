@@ -65,6 +65,8 @@ export interface Member {
   email: string;
   role: Role;
   state: "active" | "invited" | "revoked";
+  /** The member's own profile photo, or null when they have none (always null for a pending invitation). */
+  avatarUrl?: string | null;
   createdAt?: string;
   invitePath?: string;
   inviteExpiresAt?: string;

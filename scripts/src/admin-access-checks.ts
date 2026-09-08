@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID, scrypt } from "node:crypto";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
-import { db, phoenixMemberships, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, pool } from "@workspace/db";
+import { db, phoenixMemberships, phoenixUserAvatars, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, pool } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 
 // Release checks for admin access: super-admin login, the invitation flow and
@@ -351,6 +351,8 @@ try {
   const created = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(inArray(phoenixUsers.workspaceId, workspaceIds));
   if (created.length) await db.delete(phoenixMemberships).where(inArray(phoenixMemberships.userId, created.map(user => user.id)));
   await db.delete(phoenixMemberships).where(inArray(phoenixMemberships.workspaceId, workspaceIds));
+  // Profile photos reference the account, so they have to go before it does.
+  if (created.length) await db.delete(phoenixUserAvatars).where(inArray(phoenixUserAvatars.userId, created.map(user => user.id)));
   await db.delete(phoenixUsers).where(inArray(phoenixUsers.workspaceId, workspaceIds));
   await db.delete(phoenixUserInvites).where(inArray(phoenixUserInvites.workspaceId, workspaceIds));
   await db.delete(phoenixWorkspaces).where(inArray(phoenixWorkspaces.id, workspaceIds));

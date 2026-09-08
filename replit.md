@@ -164,6 +164,41 @@ so a role differs per workspace and a change takes effect on the next request.
   the workspace needs `workspace.manage`, so a staff or partner invitee lands on a working
   dashboard with the management screens hidden.
 
+## Accounts & profile photos
+
+A person's name, password and photo belong to the **account**, not to a workspace, so
+they follow them into every workspace they are a member of. `/admin/settings` ("Your
+account") is where all three are edited, and every role reaches it — the sidebar profile
+button is its door, deliberately not a menu item, because the menu is the workspace's
+screens rather than the person's.
+
+- **A profile photo is not the guide photo.** `workspace.guide.photoUrl` is the *brand's*
+  face on the public site and is the same for every member; it is edited in Branding &
+  White Label. The sidebar used to render it beside the signed-in person's name, so
+  everybody saw the owner's headshot as their own. Anything showing a person renders
+  `session.user.avatarUrl` (or `member.avatarUrl`) through `components/admin/UserAvatar`,
+  which falls back to their initials — never to a stand-in photograph.
+- **Where the bytes live.** `phoenix_user_avatars`, one row per account, base64 in a text
+  column: there is no object store in this deployment, and a photo is small and read far
+  more often than written. Its own table, so the account row every request loads never
+  drags a photo along; left-joined on `updated_at` alone where the directory only needs to
+  know *whether* there is one.
+- **Upload path.** The browser crops to a centred square, re-encodes at 512px and posts a
+  `data:` URL to `PUT /api/me/avatar` — so a 4 MB phone photo crosses the wire as ~50 KB and
+  the API needs no multipart middleware. Only that endpoint gets the larger JSON body cap
+  (see `app.ts`); everything else keeps Express's 100 KB default. The server sniffs the
+  image type from the bytes and stores that, never the client's label, so SVG (which can
+  carry script) is refused and a mislabelled payload cannot be served back as markup.
+- **Serving.** `GET /api/users/:id/avatar?v=<updated_at>` is readable by anyone who shares a
+  workspace with its owner, and 404s otherwise. The version in the URL means the bytes
+  there never change, so it is cached `private, immutable` for a year and a new upload still
+  appears at once.
+- **Passwords.** `POST /api/me/password` proves the current password first — the session
+  cookie alone must not be enough, or a borrowed browser would be enough to lock its owner
+  out. This is the only way to change a password in production: `/auth/reset/request` is
+  disabled there on purpose. Sessions already issued elsewhere survive the change; they are
+  self-contained signed cookies with no server-side record to revoke.
+
 ## Gotchas
 
 - The admin shell is mounted with `<Route path="/admin" nest>`, so wouter resolves every `<Link>`,
@@ -174,6 +209,10 @@ so a role differs per workspace and a change takes effect on the next request.
   `routes.test.tsx` fails on any item that does not reach its route. Links that leave the admin (View
   site, View page, the sign-in page) are plain anchors from `lib/site-links.ts`, because wouter's `~/`
   absolute form ignores Vite's base path.
+- `/admin/settings` is registered in `pages/admin/routes.tsx` but intentionally absent from
+  `AdminNav`, so it is the one screen the "add to both" rule above does not apply to.
+  `routes.test.tsx` pins both halves of that: the route resolves, and the item stays out of
+  the menu.
 - The seeded workspace is inserted with `onConflictDoNothing()`, so editing the seed defaults
   changes nothing for a workspace that already exists. Correcting live values (the site domain,
   say) has to happen through the admin UI, not a deploy.
