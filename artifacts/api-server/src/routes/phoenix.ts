@@ -116,16 +116,46 @@ router.post("/auth/bootstrap", async (req, res) => {
   }
 });
 
+type InviteStatus = "valid" | "invalid" | "expired" | "used" | "revoked" | "workspace_unavailable";
+const inviteStatus = (res: any, status: InviteStatus, detail: Record<string, unknown> = {}) => res.json({ status, ...detail });
+/**
+ * Status of an invitation link, so the signup page can say a link is dead before
+ * the invitee fills out the account form. Deliberately lopsided: a live
+ * invitation echoes back the address, role and workspace it was issued for —
+ * facts the invitation email already carried to that person — while every dead
+ * or unknown token answers with a bare status and nothing about the workspace
+ * behind it. Acceptance still revalidates atomically in /auth/signup; this is a
+ * courtesy ahead of the form, never the gate.
+ */
+router.get("/auth/invite", async (req, res) => {
+  if (limited(req, "invite-status", 30)) return res.status(429).json({ error: "rate_limited" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
+  res.set("cache-control", "no-store");
+  const token = String(req.query.token ?? "");
+  const [invite] = token && token.length <= 512
+    ? await db.select().from(phoenixUserInvites).where(eq(phoenixUserInvites.tokenHash, capabilityHash(token, secret))).limit(1)
+    : [];
+  if (!invite) return inviteStatus(res, "invalid");
+  if (invite.revokedAt) return inviteStatus(res, "revoked");
+  if (invite.usedAt) return inviteStatus(res, "used");
+  if (invite.expiresAt.getTime() <= Date.now()) return inviteStatus(res, "expired", { expiresAt: invite.expiresAt.toISOString() });
+  const store = await getPhoenixStore(invite.workspaceId);
+  if (!store) return inviteStatus(res, "workspace_unavailable");
+  inviteStatus(res, "valid", { email: invite.email, role: invite.role, workspaceName: store.getWorkspace().name, expiresAt: invite.expiresAt.toISOString() });
+});
+
 router.post("/auth/signup", async (req, res) => {
   const b = body(req), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
   if (!String(b.name ?? "").trim() || !/.+@.+\..+/.test(email) || password.length < 8) return res.status(400).json({ error: "validation_failed" });
-  if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "auth_unavailable" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "auth_unavailable" });
   const [existing] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
   if (existing) return res.status(409).json({ error: "email_taken" });
   const requestedSlug = slug(String(b.subdomain ?? "").trim()) ?? slug(String(b.brandName ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) ?? null, pendingCustomDomain = b.customDomain === undefined ? null : customHost(b.customDomain), domainVerificationToken = pendingCustomDomain ? randomBytes(24).toString("base64url") : null;
   if (b.customDomain !== undefined && !pendingCustomDomain) return res.status(400).json({ error: "invalid_custom_domain" });
-  const inviteToken = String(b.inviteToken ?? ""), inviteHash = inviteToken ? createHmac("sha256", process.env.SESSION_SECRET).update(inviteToken).digest("hex") : "";
-  const [invite] = inviteToken ? await db.select().from(phoenixUserInvites).where(and(eq(phoenixUserInvites.tokenHash, inviteHash), gt(phoenixUserInvites.expiresAt, new Date()), isNull(phoenixUserInvites.usedAt))).limit(1) : [];
+  const inviteToken = String(b.inviteToken ?? ""), inviteHash = inviteToken ? capabilityHash(inviteToken, secret) : "";
+  const [invite] = inviteToken ? await db.select().from(phoenixUserInvites).where(and(eq(phoenixUserInvites.tokenHash, inviteHash), gt(phoenixUserInvites.expiresAt, new Date()), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt))).limit(1) : [];
   if (inviteToken && !invite) return res.status(400).json({ error: "invalid_or_expired_invite" });
   if (!invite && !requestedSlug) return res.status(400).json({ error: "valid_subdomain_required" });
   if (invite && invite.email !== email) return res.status(403).json({ error: "invite_email_mismatch" });
@@ -134,7 +164,7 @@ router.post("/auth/signup", async (req, res) => {
   const passwordRecord = await hashPassword(password), user = { id: `usr_${randomUUID()}`, email, workspaceId, name, role: invite?.role ?? "owner" };
   if (invite) {
     const accepted = await db.transaction(async tx => {
-      const locked = await tx.execute(sql`SELECT id, workspace_id, email, role FROM phoenix_user_invites WHERE id = ${invite.id} AND used_at IS NULL AND expires_at > now() FOR UPDATE`);
+      const locked = await tx.execute(sql`SELECT id, workspace_id, email, role FROM phoenix_user_invites WHERE id = ${invite.id} AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now() FOR UPDATE`);
       const current = locked.rows[0] as { id: string; workspace_id: string; email: string; role: string } | undefined;
       if (!current) return null;
       if (current.email !== email) return "email_mismatch" as const;
@@ -245,6 +275,10 @@ router.post("/members/invite", async (req, res) => {
   const tokenHash = capabilityHash(token, secret);
   const expiresAt = new Date(Date.now() + 7 * 86400_000);
   const workspaceId = identity(req).workspaceId;
+  // Re-inviting an address supersedes the links already in that person's inbox,
+  // so a stale one cannot be redeemed for the role it used to carry — and so the
+  // signup page can tell them the older link was replaced rather than "invalid".
+  await db.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(and(eq(phoenixUserInvites.workspaceId, workspaceId), eq(phoenixUserInvites.email, email), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt)));
   await db.insert(phoenixUserInvites).values({
     id: `inv_${randomUUID()}`,
     tokenHash,
