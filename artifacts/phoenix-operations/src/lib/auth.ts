@@ -5,7 +5,12 @@ import type { Role, WorkspaceMembership } from "./types";
 // so the active one lives in the session cookie and is swapped server-side.
 
 export interface AuthSession {
-  user: { id: string; email: string; name: string; role: Role };
+  /**
+   * `avatarUrl` is the signed-in person's own profile photo, or null when they
+   * have not uploaded one. It is never the workspace's guide photo — that one is
+   * the brand's face on the public site and belongs to every member equally.
+   */
+  user: { id: string; email: string; name: string; role: Role; avatarUrl?: string | null };
   workspace: { id: string; name: string; role: Role };
   workspaces: WorkspaceMembership[];
 }

@@ -72,6 +72,12 @@ export async function ensurePhoenixSchema(): Promise<void> {
         consumed_at timestamp with time zone,
         created_at timestamp with time zone NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS phoenix_user_avatars (
+        user_id text PRIMARY KEY REFERENCES phoenix_users(id),
+        content_type text NOT NULL,
+        data text NOT NULL,
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
+      );
       CREATE TABLE IF NOT EXISTS phoenix_memberships (
         id text PRIMARY KEY,
         user_id text NOT NULL REFERENCES phoenix_users(id),

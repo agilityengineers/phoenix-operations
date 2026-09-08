@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Member } from "@/lib/types";
+import UserAvatar from "@/components/admin/UserAvatar";
 import { getStore } from "@/lib/store";
 import { assignableRoles, can, outranksOrEquals, roleLabel, type Role } from "@/lib/roles";
 
@@ -135,9 +136,14 @@ function MembersPanel({ members, actorRole, actorId, onChanged }: Props) {
         {members.length === 0 && <p className="adm-subtle" style={{ fontSize: 13 }}>No members yet.</p>}
         {members.map((m) => (
           <div key={m.id} className="member-row">
-            <div>
-              <div className="name">{m.name}{m.id === actorId ? " (you)" : ""}</div>
-              <div className="email">{m.email}</div>
+            <div className="member-identity">
+              {/* Each member's own photo, initials when they have none. A pending
+                  invitation has no account yet, so it always shows initials. */}
+              <UserAvatar name={m.name} email={m.email} src={m.avatarUrl} size={30} />
+              <div>
+                <div className="name">{m.name}{m.id === actorId ? " (you)" : ""}</div>
+                <div className="email">{m.email}</div>
+              </div>
             </div>
             {editable(m) ? (
               <select

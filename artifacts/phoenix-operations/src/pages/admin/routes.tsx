@@ -11,6 +11,7 @@ import NetworkPage from "@/pages/admin/network";
 import IntegrationsPage from "@/pages/admin/integrations";
 import BillingPage from "@/pages/admin/billing";
 import WhiteLabelPage from "@/pages/admin/white-label";
+import SettingsPage from "@/pages/admin/settings";
 import NotFound from "@/pages/not-found";
 
 /**
@@ -32,6 +33,10 @@ export const adminRoutes: ReadonlyArray<{ path: string; component: ComponentType
   { path: "/integrations", component: IntegrationsPage },
   { path: "/billing", component: BillingPage },
   { path: "/white-label", component: WhiteLabelPage },
+  // Your own account. Deliberately absent from AdminNav: it belongs to the
+  // person, not the workspace, so its door is the profile button in the sidebar
+  // rather than a permissioned menu item.
+  { path: "/settings", component: SettingsPage },
 ];
 
 export function AdminRoutes() {
