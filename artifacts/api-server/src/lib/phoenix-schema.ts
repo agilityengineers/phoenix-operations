@@ -72,9 +72,24 @@ export async function ensurePhoenixSchema(): Promise<void> {
         consumed_at timestamp with time zone,
         created_at timestamp with time zone NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS phoenix_memberships (
+        id text PRIMARY KEY,
+        user_id text NOT NULL REFERENCES phoenix_users(id),
+        workspace_id text NOT NULL REFERENCES phoenix_workspaces(id),
+        role text NOT NULL DEFAULT 'staff',
+        created_at timestamp with time zone NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS phoenix_memberships_user_workspace_idx ON phoenix_memberships (user_id, workspace_id);
+      CREATE INDEX IF NOT EXISTS phoenix_memberships_user_idx ON phoenix_memberships (user_id);
       CREATE UNIQUE INDEX IF NOT EXISTS phoenix_users_email_unique ON phoenix_users (email);
       CREATE UNIQUE INDEX IF NOT EXISTS phoenix_reset_tokens_token_hash_unique ON phoenix_reset_tokens (token_hash);
       CREATE UNIQUE INDEX IF NOT EXISTS phoenix_bootstrap_tokens_token_hash_unique ON phoenix_bootstrap_tokens (token_hash);
+      -- Every account predating memberships keeps working: its home workspace
+      -- becomes its first membership. Idempotent, so it is safe on every boot.
+      INSERT INTO phoenix_memberships (id, user_id, workspace_id, role, created_at)
+      SELECT 'mem_' || u.id, u.id, u.workspace_id, u.role, u.created_at
+      FROM phoenix_users u
+      ON CONFLICT (user_id, workspace_id) DO NOTHING;
     `);
     logger.info("Phoenix database schema ensured");
   } catch (err) {

@@ -43,7 +43,13 @@ export class ApiStore implements DataStore {
   async getWorkspace() { return (await request<{ workspace: Workspace }>("/workspace")).workspace; }
   async updateWorkspace(patch: Partial<Workspace>) { return (await request<{ workspace: Workspace }>("/workspace", json("PATCH", patch))).workspace; }
   async listPartnerWorkspaces() { return (await request<{ workspaces: Workspace[] }>("/partners")).workspaces; }
-  async listMembers() { return (await request<{ members: Member[] }>("/members")).members; }
+  async listMembers() {
+    // Pending invitations carry the authoritative expiry; the directory row only
+    // knows that somebody was invited, so pair them up for the members list.
+    const { members, invites } = await request<{ members: Member[]; invites: { email: string; expiresAt: string }[] }>("/members");
+    const pending = new Map(invites.map(invite => [invite.email.toLowerCase(), invite.expiresAt]));
+    return members.map(member => ({ ...member, inviteExpiresAt: pending.get(member.email.toLowerCase()) ?? member.inviteExpiresAt }));
+  }
   async inviteMember(email: string, role: Member["role"]) {
     const result = await request<{
       member: Member;
@@ -58,6 +64,7 @@ export class ApiStore implements DataStore {
       inviteDelivery: result.delivery,
     };
   }
+  async revokeInvite(email: string) { return (await request<{ member: Member | null }>("/members/invite/revoke", json("POST", { email }))).member; }
   async listFunnels() { return (await request<{ funnels: Funnel[] }>("/funnels")).funnels; }
   async getFunnelBySlug(slug: string) { try { return (await request<{ funnel: Funnel }>(`/public/funnels/${encodeURIComponent(slug)}`)).funnel; } catch { return null; } }
   async getFunnelById(id: string) { try { return (await request<{ funnel: Funnel }>(`/funnels/${encodeURIComponent(id)}`)).funnel; } catch { return null; } }

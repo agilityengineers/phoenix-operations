@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import AuthShell from "@/components/auth/AuthShell";
+import { takeInviteToken } from "@/lib/auth";
 
 // 3-step self-service workspace signup:
 //   1) account (name, email, password)
@@ -23,7 +24,7 @@ type DeadStatus = "invalid" | "expired" | "used" | "revoked" | "workspace_unavai
 
 type InviteCheck =
   | { status: "checking" }
-  | { status: "valid"; email: string; role: string; workspaceName: string; expiresAt: string }
+  | { status: "valid"; email: string; role: string; workspaceName: string; expiresAt: string; accountExists: boolean }
   | { status: DeadStatus; expiresAt?: string };
 
 // Why a link cannot be used, in the invitee's language. Every one of these is
@@ -63,6 +64,7 @@ const SUBMIT_ERRORS: Record<string, string> = {
   validation_failed: "Enter your name, a valid email, and a password of at least 8 characters.",
   auth_unavailable: "Accounts can't be created right now. Try again in a few minutes.",
   email_taken: "An account already exists for this email address. Sign in instead.",
+  account_exists: "An account already exists for this email address. Sign in to add this workspace to it.",
   invite_email_mismatch: "This invitation was issued to a different email address.",
   invited_workspace_unavailable: "The workspace behind this invitation is no longer available.",
   invalid_custom_domain: "That custom domain isn't valid.",
@@ -86,7 +88,7 @@ const roleLabel = (role: string) => role.charAt(0).toUpperCase() + role.slice(1)
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
-  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
+  const [inviteToken] = useState(takeInviteToken);
   const [invite, setInvite] = useState<InviteCheck | null>(inviteToken ? { status: "checking" } : null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
@@ -107,17 +109,6 @@ export default function SignupPage() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
-  // The token is a bearer credential. Keep it in component state and drop it
-  // from the address bar so it stops riding along in history, referrers, and
-  // anything the invitee copies or screen-shares from this page.
-  useEffect(() => {
-    if (!inviteToken) return;
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has("invite")) return;
-    url.searchParams.delete("invite");
-    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [inviteToken]);
-
   const checkInvite = useCallback(async () => {
     if (!inviteToken) return;
     setInvite({ status: "checking" });
@@ -132,6 +123,7 @@ export default function SignupPage() {
         role?: string;
         workspaceName?: string;
         expiresAt?: string;
+        accountExists?: boolean;
       };
       if (value.status === "valid") {
         setInvite({
@@ -140,6 +132,7 @@ export default function SignupPage() {
           role: value.role ?? "staff",
           workspaceName: value.workspaceName ?? "your workspace",
           expiresAt: value.expiresAt ?? "",
+          accountExists: Boolean(value.accountExists),
         });
         // The server rejects any other address for this token, so the invitee
         // never gets to guess at which mailbox the invitation was sent to.
@@ -175,6 +168,12 @@ export default function SignupPage() {
       // server is the authority either way, so re-read the status and let the
       // page fall through to the explanation rather than showing a form error.
       if (code === "invalid_or_expired_invite" && inviteToken) {
+        await checkInvite();
+        return;
+      }
+      // The address gained an account between opening this page and submitting.
+      // Re-reading the status swaps the form for the sign-in-and-join panel.
+      if (code === "account_exists" && inviteToken) {
         await checkInvite();
         return;
       }
@@ -249,6 +248,34 @@ export default function SignupPage() {
 
   const accepted = invite?.status === "valid" ? invite : null;
   const expiresOn = onDate(accepted?.expiresAt);
+
+  // A live invitation to an address that already has an account. Signup would
+  // only refuse it — the workspace is added to the identity they already have,
+  // which means signing in first. Everything they already use stays as it is.
+  if (accepted?.accountExists) {
+    return (
+      <AuthShell>
+        <div className="auth-card">
+          <img src="/assets/mark.png" alt="" width={40} height={40} className="mark" />
+          <h1>You already have an account</h1>
+          <p className="auth-sub">
+            {accepted.email} is already registered. Sign in and {accepted.workspaceName} is added to
+            your account as {roleLabel(accepted.role)} — the workspaces you already use stay exactly
+            as they are.
+          </p>
+          <Link href="/login" className="signup-next" style={{ marginTop: 22, display: "inline-block", textDecoration: "none" }}>
+            Sign in and join →
+          </Link>
+          <p className="auth-foot">
+            Not you?{" "}
+            <Link href="/login" className="auth-link">
+              Sign in with a different account
+            </Link>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

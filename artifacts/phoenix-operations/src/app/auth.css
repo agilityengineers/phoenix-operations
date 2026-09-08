@@ -319,3 +319,88 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Workspace picker & invitation notes ──────────────────────────────────── */
+.ws-invite-note {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-3, #ede7da);
+  border-left: 3px solid var(--orange, #d96c2c);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ws-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.ws-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1.5px solid var(--border-3, #ede7da);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ws-option:hover:not(:disabled) {
+  border-color: var(--orange, #d96c2c);
+}
+.ws-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.ws-option.current {
+  border-color: var(--orange, #d96c2c);
+  box-shadow: 0 0 0 3px rgba(217, 108, 44, 0.12);
+}
+.ws-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ws-option-main .name {
+  font-size: 15px;
+  font-weight: 700;
+}
+.ws-option-main .slug {
+  font-size: 12px;
+  color: var(--muted-3, #8a94a2);
+}
+.ws-option-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+.ws-option-side .pill {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--border-4, #f3efe6);
+  color: var(--muted-3, #8a94a2);
+}
+.ws-option-side .go {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--orange, #d96c2c);
+}
+.auth-link.linklike {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}

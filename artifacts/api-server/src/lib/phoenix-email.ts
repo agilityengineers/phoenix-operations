@@ -70,6 +70,7 @@ export function adminInvitationEmail(options: InviteEmailOptions) {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding-top:26px;">
     <a href="${safeInviteUrl}" style="display:inline-block;background:${escapeHtml(brand.primaryColor)};color:#ffffff;border-radius:6px;padding:15px 30px;font-size:14px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-decoration:none;">Accept invitation</a>
   </td></tr></table>
+  <p style="margin:18px 0 0;font-size:13px;line-height:1.7;color:#8A94A2;">Already have an account with this address? Sign in when you follow the link and ${safeWorkspace} is added to it — the workspaces you already use are untouched.</p>
   <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#8A94A2;text-align:center;">This invitation expires on ${expiry}. If the button does not work, copy this link:<br><a href="${safeInviteUrl}" style="color:${escapeHtml(brand.primaryColor)};word-break:break-all;">${safeInviteUrl}</a></p>
 </td></tr>
 <tr><td align="center" style="background:${escapeHtml(brand.inkColor)};padding:20px 40px;">

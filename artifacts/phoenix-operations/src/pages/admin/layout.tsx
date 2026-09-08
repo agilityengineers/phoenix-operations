@@ -3,28 +3,21 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import AdminNav from "@/components/admin/AdminNav";
 import { getStore } from "@/lib/store";
+import { fetchSession, roleLabel } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
-type AuthSession = {
-  user: { email: string; name: string; role: string };
-  workspace: { id: string };
-};
+const basePath = () => import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ["auth-session"],
-    queryFn: async () => {
-      const response = await fetch("/api/auth/session", { credentials: "include" });
-      if (!response.ok) return null;
-      return response.json() as Promise<AuthSession>;
-    },
+    queryFn: fetchSession,
     retry: false,
   });
   useEffect(() => {
     if (!sessionLoading && !session) {
-      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-      window.location.replace(`${base}/admin/login`);
+      window.location.replace(`${basePath()}/admin/login`);
     }
   }, [session, sessionLoading]);
 
@@ -78,9 +71,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <img src={workspace.guide.photoUrl} alt="" width={34} height={34} style={{ borderRadius: '50%' }} />
           <div>
             <div className="name">{session.user.name}</div>
-            <div className="role">{session.user.role.charAt(0).toUpperCase() + session.user.role.slice(1)}</div>
+            <div className="role">{roleLabel(session.workspace.role ?? session.user.role)}</div>
           </div>
         </div>
+        {session.workspaces.length > 1 && (
+          // A plain href, not a <Link>: this subtree runs inside the nested
+          // /admin router, whose relative links would resolve to /admin/workspaces.
+          <a href={`${basePath()}/workspaces`} className="adm-workspace-switch">
+            <span className="label">Workspace</span>
+            <span className="value">{session.workspace.name || workspace.name}</span>
+            <span className="hint">Switch ({session.workspaces.length}) →</span>
+          </a>
+        )}
         <Link href="/" className="adm-viewsite">
           ← View site
         </Link>

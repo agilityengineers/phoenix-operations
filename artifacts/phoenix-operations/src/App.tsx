@@ -15,6 +15,7 @@ import LoginPage from '@/pages/auth/login';
 import SignupPage from '@/pages/auth/signup';
 import ResetPage from '@/pages/auth/reset';
 import BootstrapPage from '@/pages/auth/bootstrap';
+import WorkspacesPage from '@/pages/auth/workspaces';
 import FunnelPage from '@/pages/f/[slug]';
 
 // Admin Pages
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/signup" component={SignupPage} />
         <Route path="/reset" component={ResetPage} />
         <Route path="/bootstrap" component={BootstrapPage} />
+        <Route path="/workspaces" component={WorkspacesPage} />
         <Route path="/admin/login" component={LoginPage} />
 
         {/* Funnel route */}

@@ -58,6 +58,16 @@ function MembersPanel({ initialMembers }: { initialMembers: Member[] }) {
     }
   }, []);
 
+  const revoke = useCallback(async (member: Member) => {
+    if (!confirm(`Revoke the pending invitation for ${member.email}? The link they were sent stops working.`)) return;
+    try {
+      const revoked = await getStore().revokeInvite(member.email);
+      setMembers((m) => m.map((value) => (value.id === member.id ? revoked ?? { ...value, state: "revoked" } : value)));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to revoke this invitation.");
+    }
+  }, []);
+
   useEffect(() => {
     const handler = () => void invite();
     window.addEventListener("po:invite-user", handler);
@@ -79,9 +89,16 @@ function MembersPanel({ initialMembers }: { initialMembers: Member[] }) {
             >
               {m.role.charAt(0).toUpperCase() + m.role.slice(1)}
             </span>
-            <span className={`pill ${m.state === "active" ? "ok" : "warn"}`}>
+            <span className={`pill ${m.state === "active" ? "ok" : m.state === "revoked" ? "neutral" : "warn"}`}>
               {m.state.charAt(0).toUpperCase() + m.state.slice(1)}
             </span>
+            {m.state === "invited" ? (
+              <button type="button" className="member-revoke" onClick={() => void revoke(m)}>
+                Revoke
+              </button>
+            ) : (
+              <span />
+            )}
           </div>
         ))}
       </div>
