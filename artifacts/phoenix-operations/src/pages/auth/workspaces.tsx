@@ -4,23 +4,25 @@ import AuthShell from "@/components/auth/AuthShell";
 import {
   acceptInvitation,
   authErrorMessage,
+  clearInviteToken,
   enterWorkspace,
   fetchInvitation,
   fetchSession,
-  inviteTokenFromUrl,
+  isLiveInvitation,
   roleLabel,
+  takeInviteToken,
   type InvitationPreview,
 } from "@/lib/auth";
 import type { WorkspaceMembership } from "@/lib/types";
 
 // Where a signed-in account chooses which workspace to work in, and where an
-// invitation is redeemed once its recipient already has an account. Arriving
-// with ?invite=… accepts that invitation and adds the workspace; arriving
-// without one is just the picker.
+// invitation is redeemed once its recipient already has an account. A pending
+// invitation token (handed over by the signup or login page) is accepted here
+// and its workspace added; with no token this is just the picker.
 
 export default function WorkspacesPage() {
   const [, setLocation] = useLocation();
-  const [token] = useState(inviteTokenFromUrl);
+  const [token] = useState(takeInviteToken);
   const [workspaces, setWorkspaces] = useState<WorkspaceMembership[]>([]);
   const [activeId, setActiveId] = useState("");
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
@@ -40,7 +42,7 @@ export default function WorkspacesPage() {
       const session = await fetchSession();
       if (cancelled) return;
       if (!session) {
-        setLocation(token ? `/login?invite=${encodeURIComponent(token)}` : "/login");
+        setLocation("/login");
         return;
       }
       setWorkspaces(session.workspaces);
@@ -52,12 +54,13 @@ export default function WorkspacesPage() {
       }
       const preview = await fetchInvitation(token);
       if (cancelled) return;
-      setInvitation(preview);
-      if (!preview) {
+      if (!isLiveInvitation(preview)) {
+        clearInviteToken();
         setError(authErrorMessage("invalid_or_expired_invite"));
         setLoading(false);
         return;
       }
+      setInvitation(preview);
       if (!preview.acceptableNow) {
         // Signed in as somebody else. Say so plainly rather than silently
         // dropping the invitation on the floor.
@@ -67,11 +70,13 @@ export default function WorkspacesPage() {
       }
       try {
         const accepted = await acceptInvitation(token);
+        clearInviteToken();
         if (cancelled) return;
         setWorkspaces(accepted.workspaces);
         setActiveId(accepted.workspace.id);
         setJoined(accepted.workspace.name);
       } catch (err) {
+        clearInviteToken();
         if (!cancelled) setError(authErrorMessage(err));
       } finally {
         if (!cancelled) setLoading(false);
@@ -95,6 +100,7 @@ export default function WorkspacesPage() {
   };
 
   const signOut = async () => {
+    clearInviteToken();
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setLocation("/login");
   };
@@ -111,7 +117,7 @@ export default function WorkspacesPage() {
 
         {invitation && !joined && !error && (
           <div className="ws-invite-note">
-            Invitation to <strong>{invitation.workspace.name}</strong> as {roleLabel(invitation.role)}.
+            Invitation to <strong>{invitation.workspaceName}</strong> as {roleLabel(invitation.role)}.
           </div>
         )}
 

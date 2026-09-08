@@ -51,8 +51,10 @@ export async function ensurePhoenixSchema(): Promise<void> {
         role text NOT NULL DEFAULT 'staff',
         expires_at timestamp with time zone NOT NULL,
         used_at timestamp with time zone,
+        revoked_at timestamp with time zone,
         created_at timestamp with time zone NOT NULL DEFAULT now()
       );
+      ALTER TABLE phoenix_user_invites ADD COLUMN IF NOT EXISTS revoked_at timestamp with time zone;
       CREATE INDEX IF NOT EXISTS phoenix_user_invites_workspace_email_idx ON phoenix_user_invites (workspace_id, email);
       CREATE TABLE IF NOT EXISTS phoenix_reset_tokens (
         id text PRIMARY KEY,
@@ -70,7 +72,6 @@ export async function ensurePhoenixSchema(): Promise<void> {
         consumed_at timestamp with time zone,
         created_at timestamp with time zone NOT NULL DEFAULT now()
       );
-      ALTER TABLE phoenix_user_invites ADD COLUMN IF NOT EXISTS revoked_at timestamp with time zone;
       CREATE TABLE IF NOT EXISTS phoenix_memberships (
         id text PRIMARY KEY,
         user_id text NOT NULL REFERENCES phoenix_users(id),

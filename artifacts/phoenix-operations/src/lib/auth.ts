@@ -10,11 +10,16 @@ export interface AuthSession {
   workspaces: WorkspaceMembership[];
 }
 
+/** Why an invitation link cannot be used. `valid` is the only live state. */
+export type InviteStatus = "valid" | "invalid" | "expired" | "used" | "revoked" | "workspace_unavailable";
+
+/** A live invitation, as `GET /api/auth/invite` describes it. */
 export interface InvitationPreview {
+  status: "valid";
   email: string;
   role: Role;
+  workspaceName: string;
   expiresAt: string;
-  workspace: { id: string; name: string };
   /** An account already exists for the invited address, so it has to be signed into. */
   accountExists: boolean;
   /** Email of the account currently signed in, or null when nobody is. */
@@ -35,8 +40,46 @@ const post = async <T>(path: string, body?: unknown): Promise<T> => {
   return value as T;
 };
 
-export const inviteTokenFromUrl = () =>
-  new URLSearchParams(window.location.search).get("invite") ?? "";
+const INVITE_KEY = "po-invite-token";
+
+/**
+ * The invitation token for this browser session, from the URL if the invitee
+ * just arrived on the link, otherwise from a hand-off between the auth pages.
+ *
+ * The token is a bearer credential, so reading it from the URL also strips it
+ * from the address bar — it stops riding along in history, referrers, and
+ * anything the invitee screen-shares. That is also why the auth pages pass it to
+ * each other through session storage rather than putting it back in a query.
+ */
+export const takeInviteToken = () => {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.href);
+  const fromUrl = url.searchParams.get("invite") ?? "";
+  if (fromUrl) {
+    try {
+      sessionStorage.setItem(INVITE_KEY, fromUrl);
+    } catch {
+      // Private browsing can refuse storage; the token still lives in page state.
+    }
+    url.searchParams.delete("invite");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    return fromUrl;
+  }
+  try {
+    return sessionStorage.getItem(INVITE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+
+/** Forgets the token once it has been redeemed or refused for good. */
+export const clearInviteToken = () => {
+  try {
+    sessionStorage.removeItem(INVITE_KEY);
+  } catch {
+    // Nothing was stored; nothing to forget.
+  }
+};
 
 /** The signed-in session, or null when the cookie is missing, stale, or workspace-less. */
 export const fetchSession = async (): Promise<AuthSession | null> => {
@@ -45,20 +88,29 @@ export const fetchSession = async (): Promise<AuthSession | null> => {
   return (await response.json()) as AuthSession;
 };
 
-/** What an invitation link offers, or null when it is used, expired, or revoked. */
-export const fetchInvitation = async (token: string): Promise<InvitationPreview | null> => {
-  if (!token) return null;
-  const response = await fetch(`/api/auth/invitation?token=${encodeURIComponent(token)}`, {
+/**
+ * What an invitation link offers. Returns the live invitation, or the status
+ * explaining why it is dead — the signup page renders that explanation instead
+ * of a form the invitee could never submit.
+ */
+export const fetchInvitation = async (token: string): Promise<InvitationPreview | { status: Exclude<InviteStatus, "valid"> }> => {
+  if (!token) return { status: "invalid" };
+  const response = await fetch(`/api/auth/invite?token=${encodeURIComponent(token)}`, {
     credentials: "include",
   });
-  if (!response.ok) return null;
-  return ((await response.json()) as { invitation: InvitationPreview }).invitation;
+  if (!response.ok) return { status: "invalid" };
+  return (await response.json()) as InvitationPreview | { status: Exclude<InviteStatus, "valid"> };
 };
+
+/** Narrows a preview to a live invitation. */
+export const isLiveInvitation = (
+  preview: InvitationPreview | { status: InviteStatus } | null,
+): preview is InvitationPreview => preview?.status === "valid";
 
 /** Adds the invited workspace to the signed-in account and makes it the active one. */
 export const acceptInvitation = (token: string) =>
   post<{ workspace: { id: string; name: string; role: Role }; workspaces: WorkspaceMembership[] }>(
-    "/api/auth/invitation/accept",
+    "/api/auth/invite/accept",
     { token },
   );
 

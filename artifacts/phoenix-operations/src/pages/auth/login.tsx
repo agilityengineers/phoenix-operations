@@ -4,15 +4,16 @@ import AuthShell from "@/components/auth/AuthShell";
 import {
   authErrorMessage,
   fetchInvitation,
-  inviteTokenFromUrl,
+  isLiveInvitation,
   roleLabel,
+  takeInviteToken,
   type InvitationPreview,
 } from "@/lib/auth";
 import type { WorkspaceMembership } from "@/lib/types";
 
 export default function LoginPage() {
   const [_, setLocation] = useLocation();
-  const [inviteToken] = useState(inviteTokenFromUrl);
+  const [inviteToken] = useState(takeInviteToken);
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +27,7 @@ export default function LoginPage() {
     let cancelled = false;
     void fetchInvitation(inviteToken).then((preview) => {
       if (cancelled) return;
-      if (!preview) {
+      if (!isLiveInvitation(preview)) {
         setError(authErrorMessage("invalid_or_expired_invite"));
         return;
       }
@@ -57,7 +58,7 @@ export default function LoginPage() {
       // The picker page also redeems invitations, so send anyone arriving with a
       // token there — and anyone with a choice of workspaces to make.
       if (inviteToken) {
-        setLocation(`/workspaces?invite=${encodeURIComponent(inviteToken)}`);
+        setLocation("/workspaces");
         return;
       }
       if ((session.workspaces?.length ?? 1) > 1) {
@@ -83,7 +84,7 @@ export default function LoginPage() {
         <h1>{invitation ? "Sign in to join the workspace" : "Sign in to your workspace"}</h1>
         <p className="auth-sub">
           {invitation
-            ? `${invitation.workspace.name} invited ${invitation.email} to join as ${roleLabel(invitation.role)}. Signing in adds it to your account — the workspaces you already use stay exactly as they are.`
+            ? `${invitation.workspaceName} invited ${invitation.email} to join as ${roleLabel(invitation.role)}. Signing in adds it to your account — the workspaces you already use stay exactly as they are.`
             : "Funnels, pipeline, and everything in between."}
         </p>
         <form className="auth-form" onSubmit={signIn}>
@@ -129,7 +130,7 @@ export default function LoginPage() {
           {invitation && !invitation.accountExists ? (
             <>
               No account for {invitation.email} yet?{" "}
-              <Link href={`/signup?invite=${encodeURIComponent(inviteToken)}`} className="auth-link">
+              <Link href="/signup" className="auth-link">
                 Create one and join
               </Link>
             </>

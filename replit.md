@@ -113,15 +113,19 @@ so a role differs per workspace and a change takes effect on the next request.
 
 - **Accepting an invitation never replaces access.** `POST /auth/signup` mints a new
   identity and refuses a known email with `account_exists`; a returning user signs in and
-  calls `POST /auth/invitation/accept`, which adds a membership and leaves every other one
+  calls `POST /auth/invite/accept`, which adds a membership and leaves every other one
   alone. Both paths run inside one transaction that locks the invitation row, so a token
   cannot be spent twice.
 - **Choosing where to work.** `POST /auth/login` lands in the home workspace and returns
   the full `workspaces` list; `/workspaces` is the picker, and `POST /auth/workspace`
   re-issues the cookie for another workspace the account already belongs to.
 - **Rejections.** Wrong-email, used, expired and revoked invitations all fail closed.
-  Revocation is `POST /members/invite/revoke` (owner/admin) — it stamps `revoked_at` on
-  every pending invitation for that address, so the link keeps its shape but buys nothing.
+  `GET /auth/invite` classifies a link before the form and, for a live one, also says
+  whether the invited address already has an account and whether this browser's session
+  is that account — which is how signup knows to send a returning invitee to sign-in.
+  Revocation is `POST /members/invite/revoke` (owner/admin), alongside the supersession
+  that re-inviting an address already performs; both stamp `revoked_at`, so the old link
+  keeps its shape but buys nothing.
 - **Backfill.** `ensurePhoenixSchema()` writes a membership for every user's home
   workspace on each boot (idempotent). Until it runs, the home workspace on the user row
   still counts as an implicit membership, so accounts predating the table keep working.

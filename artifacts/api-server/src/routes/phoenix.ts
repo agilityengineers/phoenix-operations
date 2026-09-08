@@ -202,6 +202,52 @@ router.post("/auth/bootstrap", async (req, res) => {
   }
 });
 
+type InviteStatus = "valid" | "invalid" | "expired" | "used" | "revoked" | "workspace_unavailable";
+const inviteStatus = (res: any, status: InviteStatus, detail: Record<string, unknown> = {}) => res.json({ status, ...detail });
+/**
+ * Status of an invitation link, so the signup page can say a link is dead before
+ * the invitee fills out the account form. Deliberately lopsided: a live
+ * invitation echoes back the address, role and workspace it was issued for —
+ * facts the invitation email already carried to that person — while every dead
+ * or unknown token answers with a bare status and nothing about the workspace
+ * behind it. Acceptance still revalidates atomically in /auth/signup; this is a
+ * courtesy ahead of the form, never the gate.
+ *
+ * A live invitation also says whether the invited address already has an account
+ * — and whether the session in this browser is that account — so the page can
+ * route the invitee to sign-in-and-join instead of a signup form that would only
+ * refuse them. Both facts concern the invitee alone, and neither is disclosed for
+ * a token that is not live.
+ */
+router.get("/auth/invite", async (req, res) => {
+  if (limited(req, "invite-status", 30)) return res.status(429).json({ error: "rate_limited" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
+  res.set("cache-control", "no-store");
+  const token = String(req.query.token ?? "");
+  const [invite] = token && token.length <= 512
+    ? await db.select().from(phoenixUserInvites).where(eq(phoenixUserInvites.tokenHash, capabilityHash(token, secret))).limit(1)
+    : [];
+  if (!invite) return inviteStatus(res, "invalid");
+  if (invite.revokedAt) return inviteStatus(res, "revoked");
+  if (invite.usedAt) return inviteStatus(res, "used");
+  if (invite.expiresAt.getTime() <= Date.now()) return inviteStatus(res, "expired", { expiresAt: invite.expiresAt.toISOString() });
+  const store = await getPhoenixStore(invite.workspaceId);
+  if (!store) return inviteStatus(res, "workspace_unavailable");
+  const [invited] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, invite.email)).limit(1);
+  const signed = session(req);
+  const [current] = signed ? await db.select({ email: phoenixUsers.email }).from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1) : [];
+  inviteStatus(res, "valid", {
+    email: invite.email,
+    role: invite.role,
+    workspaceName: store.getWorkspace().name,
+    expiresAt: invite.expiresAt.toISOString(),
+    accountExists: Boolean(invited),
+    signedInAs: current?.email ?? null,
+    acceptableNow: Boolean(current && sameEmail(current.email, invite.email)),
+  });
+});
+
 router.post("/auth/signup", async (req, res) => {
   const b = body(req), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
   if (!String(b.name ?? "").trim() || !/.+@.+\..+/.test(email) || password.length < 8) return res.status(400).json({ error: "validation_failed" });
@@ -216,7 +262,7 @@ router.post("/auth/signup", async (req, res) => {
   const [existing] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
   // Signup only ever mints a new identity. A returning user accepting an
   // invitation signs in first and adds the workspace through
-  // POST /auth/invitation/accept, so their existing access survives intact.
+  // POST /auth/invite/accept, so their existing access survives intact.
   if (existing && invite) return res.status(409).json({ error: "account_exists", email });
   if (existing) return res.status(409).json({ error: "email_taken" });
   const workspaceId = invite?.workspaceId ?? `ws_${randomUUID()}`, template = await getPhoenixStore(WORKSPACE_ID, true), name = String(b.name).trim(), brandName = String(b.brandName ?? "").trim() || name;
@@ -260,41 +306,11 @@ router.post("/auth/reset/confirm", async (req, res) => { const token = String(bo
 
 
 /**
- * What an invitation link is worth, before anyone spends it. Public because the
- * token itself is the capability, and the holder already received the email —
- * so this tells them which workspace and role are on offer, whether an account
- * already exists for the invited address, and whether the session they are
- * currently signed into is the one that can accept it.
- */
-router.get("/auth/invitation", async (req, res) => {
-  if (limited(req, "invitation", 30)) return res.status(429).json({ error: "rate_limited" });
-  const secret = serverSecret();
-  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
-  const invite = await inviteByToken(String(req.query.token ?? ""), secret);
-  if (!inviteOpen(invite)) return res.status(400).json({ error: "invalid_or_expired_invite" });
-  const [workspace] = await db.select().from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, invite.workspaceId)).limit(1);
-  if (!workspace) return res.status(410).json({ error: "invited_workspace_unavailable" });
-  const [invited] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, invite.email)).limit(1);
-  const signed = session(req);
-  const [current] = signed ? await db.select({ email: phoenixUsers.email }).from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1) : [];
-  res.json({
-    invitation: {
-      email: invite.email,
-      role: invite.role,
-      expiresAt: invite.expiresAt,
-      workspace: { id: workspace.id, name: workspaceName(workspace.state) },
-      accountExists: Boolean(invited),
-      signedInAs: current?.email ?? null,
-      acceptableNow: Boolean(current && sameEmail(current.email, invite.email)),
-    },
-  });
-});
-/**
  * Adds the invited workspace to the signed-in account. The session's own email is
  * the trust anchor — an invitation is only spendable by the account it was
  * addressed to, so a link forwarded to somebody else buys them nothing.
  */
-router.post("/auth/invitation/accept", csrfOrigin, signedIn, async (req, res) => {
+router.post("/auth/invite/accept", csrfOrigin, signedIn, async (req, res) => {
   const secret = serverSecret();
   if (!secret) return res.status(503).json({ error: "invites_unavailable" });
   const user = account(req);
@@ -396,6 +412,10 @@ router.post("/members/invite", async (req, res) => {
   const tokenHash = capabilityHash(token, secret);
   const expiresAt = new Date(Date.now() + 7 * 86400_000);
   const workspaceId = identity(req).workspaceId;
+  // Re-inviting an address supersedes the links already in that person's inbox,
+  // so a stale one cannot be redeemed for the role it used to carry — and so the
+  // signup page can tell them the older link was replaced rather than "invalid".
+  await db.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(and(eq(phoenixUserInvites.workspaceId, workspaceId), eq(phoenixUserInvites.email, email), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt)));
   await db.insert(phoenixUserInvites).values({
     id: `inv_${randomUUID()}`,
     tokenHash,
