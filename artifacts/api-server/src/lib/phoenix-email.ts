@@ -1,3 +1,5 @@
+import { roleLabel } from "./phoenix-roles";
+
 type InviteBrand = {
   logoUrl: string;
   primaryColor: string;
@@ -35,7 +37,6 @@ const absoluteUrl = (value: string, siteUrl: string) => {
   }
 };
 
-const roleLabel = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
 
 export function adminInvitationEmail(options: InviteEmailOptions) {
   const { brand, expiresAt, inviterName, inviteUrl, role, siteUrl, workspaceName } = options;

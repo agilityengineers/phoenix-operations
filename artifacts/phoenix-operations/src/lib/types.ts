@@ -2,7 +2,8 @@
 // Mirrors supabase/migrations/0001_init.sql.
 
 export type WorkspaceType = "eos_implementer" | "consultant" | "other";
-export type Role = "admin" | "owner" | "staff" | "partner";
+import type { Role } from "./roles";
+export type { Role };
 export type FunnelStatus = "live" | "draft" | "paused";
 export type PlanId = "solo" | "practice" | "network";
 
@@ -50,6 +51,11 @@ export interface Workspace {
   plan: PlanId;
   scheduling: SchedulingConfig;
   createdAt: string;
+  /** Present on the platform-wide partner list only. */
+  slug?: string;
+  customDomain?: string | null;
+  isPublic?: boolean;
+  memberCount?: number;
 }
 
 export interface Member {
@@ -59,6 +65,7 @@ export interface Member {
   email: string;
   role: Role;
   state: "active" | "invited";
+  createdAt?: string;
   invitePath?: string;
   inviteExpiresAt?: string;
   inviteDelivery?: {

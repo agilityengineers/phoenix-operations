@@ -3,24 +3,13 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import AdminNav from "@/components/admin/AdminNav";
 import { getStore } from "@/lib/store";
+import { useSession } from "@/lib/session";
+import { roleLabel } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
-
-type AuthSession = {
-  user: { email: string; name: string; role: string };
-  workspace: { id: string };
-};
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
-  const { data: session, isLoading: sessionLoading } = useQuery({
-    queryKey: ["auth-session"],
-    queryFn: async () => {
-      const response = await fetch("/api/auth/session", { credentials: "include" });
-      if (!response.ok) return null;
-      return response.json() as Promise<AuthSession>;
-    },
-    retry: false,
-  });
+  const { data: session, isLoading: sessionLoading } = useSession();
   useEffect(() => {
     if (!sessionLoading && !session) {
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -73,12 +62,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="bottom">OPERATIONS</div>
           </div>
         </div>
-        <AdminNav />
+        <AdminNav role={session.user.role} />
         <div className="adm-user">
           <img src={workspace.guide.photoUrl} alt="" width={34} height={34} style={{ borderRadius: '50%' }} />
           <div>
             <div className="name">{session.user.name}</div>
-            <div className="role">{session.user.role.charAt(0).toUpperCase() + session.user.role.slice(1)}</div>
+            <div className="role">{roleLabel(session.user.role)}</div>
           </div>
         </div>
         <Link href="/" className="adm-viewsite">

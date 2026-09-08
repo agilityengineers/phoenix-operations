@@ -50,12 +50,6 @@ const funnel = (id: string, name: string, slug: string, status: string, visits: 
 export class PhoenixStore {
   private counter = 100;
   private workspace = clone(workspace);
-  private members = [
-    { id: "m1", workspaceId: WORKSPACE_ID, name: "Joshua Kornitsky", email: "joshua@phoenixoperations.com", role: "admin", state: "active" },
-    { id: "m2", workspaceId: WORKSPACE_ID, name: "Dana Whitfield", email: "dana@phoenixoperations.com", role: "staff", state: "active" },
-    { id: "m3", workspaceId: WORKSPACE_ID, name: "Chris Crew", email: "chris@bluecollarsuccess.com", role: "partner", state: "active" },
-    { id: "m4", workspaceId: WORKSPACE_ID, name: "Renee Alcott", email: "renee@alcottops.com", role: "partner", state: "invited" },
-  ];
   private funnels = [funnel("control", "Lack of Control", "lack-of-control", "live", 1284, 86), funnel("profit", "Lack of Profit", "lack-of-profit", "live", 702, 38), funnel("people", "People", "people", "draft", 0, 0), funnel("ceiling", "Hitting the Ceiling", "hitting-the-ceiling", "live", 449, 21), funnel("nothing", "Nothing Works", "nothing-works", "paused", 188, 6)];
   private sessions = new Map<string, Record<string, unknown>>();
   private pipelines = [{ id: "prospects", workspaceId: WORKSPACE_ID, name: "Prospects", desc: "Potential clients moving from intake to engagement", stages: ["New", "Qualified", "Call scheduled", "In conversation"] }, { id: "clients", workspaceId: WORKSPACE_ID, name: "Client journey", desc: "Active clients", stages: ["Onboarding", "Foundation", "Traction", "Graduated"] }];
@@ -63,7 +57,6 @@ export class PhoenixStore {
     ["1","Marcus Webb","Webb Mechanical","Owner / Founder","marcus@webbmech.com","Lack of Control","google / cpc",88,1,"Joshua"], ["2","Sarah Delgado","Delgado Electric","CEO / President","sarah@delgadoelectric.com","Lack of Control","linkedin / organic",76,2,"Joshua"], ["3","Tom Brantley","Brantley HVAC","Owner / Founder","tom@brantleyhvac.com","Lack of Profit","referral",91,2,"Joshua"], ["4","Priya Nair","Nair Consulting","COO / Operations","priya@nairconsulting.com","People","newsletter",54,0,"—"], ["5","Dale Hutchins","Hutchins Plumbing Co.","Owner / Founder","dale@hutchinsplumbing.com","Lack of Control","google / cpc",83,3,"Joshua"], ["6","Renee Alcott","Alcott Landscapes","Owner / Founder","renee@alcottlandscapes.com","Hitting the Ceiling","facebook / paid",67,1,"Joshua"], ["7","Gene Park","Park Manufacturing","Other leadership","gene@parkmfg.com","Nothing Works","referral",41,0,"—"], ["8","Chris Crew","The Blue Collar Success Group","President","chris@bluecollarsuccess.com","Referral","referral",91,2,"Joshua","clients"], ["9","Danielle Putnam","The New Flat Rate","CEO / President","danielle@newflatrate.com","Referral","referral",88,2,"Joshua","clients"], ["10","Lincoln Higdon","Centerpoint IT","CEO / President","lincoln@centerpointit.com","Lack of Control","google / cpc",84,1,"Joshua","clients"], ["11","Teresa Vance","Vance Roofing","Owner / Founder","teresa@vanceroofing.com","Hitting the Ceiling","referral",79,0,"Joshua","clients"]].map(([id,name,company,role,email,funnelName,source,score,stage,owner,pipelineId]) => ({ id: String(id), workspaceId: WORKSPACE_ID, pipelineId: String(pipelineId ?? "prospects"), name: String(name), company: String(company), role: String(role), email: String(email), funnel: String(funnelName), source: String(source), score: Number(score), stage: Number(stage), position: 0, owner: String(owner), createdAt: "2026-09-01T13:14:02Z" }));
   private activities: Activity[] = [];
   private cms = [{ id: "home", name: "Homepage", meta: "6 sections · Published", sections: [{ id: "hero", name: "Hero", desc: "Headline, frustration selector, primary CTA", enabled: true }, { id: "howwho", name: "How It Works + Who We Help", desc: "Two-column content", enabled: true }, { id: "guideband", name: "Guide band", desc: "Guide intro", enabled: true }, { id: "results", name: "Client Perspectives", desc: "Testimonials", enabled: true }, { id: "faq", name: "FAQ", desc: "Questions", enabled: true }, { id: "footer", name: "Footer CTA", desc: "Schedule button", enabled: true }] }, { id: "guide", name: "Meet Your Guide", meta: "4 sections · Published", sections: [{ id: "ghero", name: "Guide hero", desc: "Photo and story", enabled: true }] }, { id: "results", name: "Results (private)", meta: "5 sections · Link-only", sections: [{ id: "rhero", name: "Results hero", desc: "EOS framing", enabled: true }] }, { id: "funnelTpl", name: "Funnel template", meta: "StoryBrand · 5 blocks", sections: [{ id: "fhero", name: "StoryBrand hero", desc: "Per-funnel copy", enabled: true }, { id: "fintake", name: "Intake form", desc: "Modular blocks", enabled: true }] }];
-  private partners = [{ ...workspace, id: "ws_bluecollar", name: "Blue Collar Success", domain: "bluecollarsuccess.com" }];
   private sequences = [{ id: "seq_1", workspaceId: WORKSPACE_ID, name: "New lead follow-up", trigger: "Lead created", active: true, stat: "86%", statLabel: "open rate", steps: [{ kind: "Email", label: "Welcome" }] }];
   private webhooks = [{ id: "wh_1", workspaceId: WORKSPACE_ID, event: "lead.created", desc: "New lead notification", active: true }];
   private syncLog = [{ id: "sync_1", workspaceId: WORKSPACE_ID, at: "2026-09-01T13:14:02Z", msg: "HubSpot sync complete", state: "ok" }];
@@ -79,9 +72,9 @@ export class PhoenixStore {
   }
   snapshot() {
     return clone({
-      counter: this.counter, workspace: this.workspace, members: this.members, funnels: this.funnels,
+      counter: this.counter, workspace: this.workspace, funnels: this.funnels,
       sessions: Object.fromEntries(this.sessions), pipelines: this.pipelines, contacts: this.contacts,
-      activities: this.activities, cms: this.cms, partners: this.partners, sequences: this.sequences,
+      activities: this.activities, cms: this.cms, sequences: this.sequences,
       webhooks: this.webhooks, syncLog: this.syncLog, subscriptions: this.subscriptions,
     });
   }
@@ -97,17 +90,10 @@ export class PhoenixStore {
   /** Index of a stage by name, or -1. Stage order is tenant-editable, so never hardcode the number. */
   stageIndex(pipelineId: string, stageName: string) { return (this.pipelines.find(p => p.id === pipelineId)?.stages ?? []).indexOf(stageName); }
   activitiesFor(contactId: string) { return clone(this.activities.filter(a => a.contactId === contactId).sort((a,b) => b.at.localeCompare(a.at))); } addActivity(value: Omit<Activity, "id" | "at">) { const a = { ...value, id: this.next("act"), at: now() }; this.activities.unshift(a); return clone(a); }
-  listMembers() { return clone(this.members); }
-  invite(email: string, role: string, workspaceId = this.workspace.id) { const member = { id: this.next("m"), workspaceId, name: email.split("@")[0], email, role, state: "invited" }; this.members.push(member); return clone(member); }
-  acceptInvite(email: string, name: string, role: string, workspaceId = this.workspace.id) {
-    const member = this.members.find(value => value.email.toLowerCase() === email.toLowerCase() && value.state === "invited");
-    if (member) Object.assign(member, { workspaceId, name, role, state: "active" });
-    else this.members.push({ id: this.next("m"), workspaceId, name, email, role, state: "active" });
-    return clone(member ?? this.members[this.members.length - 1]);
-  }
+  // Members and partner workspaces are not part of the JSONB state: logins live in
+  // phoenix_users, invitations in phoenix_user_invites and tenants in phoenix_workspaces.
   toggle(pageId: string, sectionId: string, enabled: boolean) { this.cms.find(p => p.id === pageId)?.sections.find(s => s.id === sectionId) && (this.cms.find(p => p.id === pageId)!.sections.find(s => s.id === sectionId)!.enabled = enabled); }
   listCms() { return clone(this.cms); }
-  listPartners() { return clone(this.partners); }
   listSequences() { return clone(this.sequences); }
   listWebhooks() { return clone(this.webhooks); }
   listSyncLog() { return clone(this.syncLog); }
