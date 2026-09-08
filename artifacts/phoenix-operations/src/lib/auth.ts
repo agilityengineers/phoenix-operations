@@ -83,9 +83,10 @@ export const clearInviteToken = () => {
 
 /** The signed-in session, or null when the cookie is missing, stale, or workspace-less. */
 export const fetchSession = async (): Promise<AuthSession | null> => {
-  const response = await fetch("/api/auth/session", { credentials: "include" });
+  const response = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
   if (!response.ok) return null;
-  return (await response.json()) as AuthSession;
+  const session = (await response.json()) as AuthSession;
+  return { ...session, workspaces: Array.isArray(session.workspaces) ? session.workspaces : [] };
 };
 
 /**

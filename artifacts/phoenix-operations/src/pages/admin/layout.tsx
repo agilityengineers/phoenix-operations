@@ -75,13 +75,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="role">{roleLabel(session.workspace.role ?? session.user.role)}</div>
           </div>
         </div>
-        {session.workspaces.length > 1 && (
+        {(session.workspaces?.length ?? 0) > 1 && (
           // A plain href, not a <Link>: this subtree runs inside the nested
           // /admin router, whose relative links would resolve to /admin/workspaces.
           <a href={`${basePath()}/workspaces`} className="adm-workspace-switch">
             <span className="label">Workspace</span>
             <span className="value">{session.workspace.name || workspace.name}</span>
-            <span className="hint">Switch ({session.workspaces.length}) →</span>
+            <span className="hint">Switch ({session.workspaces?.length ?? 0}) →</span>
           </a>
         )}
         <a href={siteHref} className="adm-viewsite">
