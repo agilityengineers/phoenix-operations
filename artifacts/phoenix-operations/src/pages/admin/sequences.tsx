@@ -30,8 +30,8 @@ export default function SequencesPage() {
         <button className="adm-btn">+ New sequence</button>
       </div>
       <p className="adm-lede">
-        Automation templates for intake events. Email delivery is unavailable until an email provider is connected; stage moves and tasks
-        land in the CRM.
+        Automation templates for intake events. These don&apos;t send yet — email delivery is wired up, but the automation that would run
+        these sequences is not; stage moves and tasks land in the CRM.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 22 }}>
         {sequences.map((q) => (

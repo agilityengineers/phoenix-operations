@@ -7,6 +7,8 @@
     "calendly:subscribe": "tsx ./src/calendly-subscribe.ts",
     "hello": "tsx ./src/hello.ts",
     "test:calendly": "tsx ./src/calendly-checks.ts",
+    "test:sendgrid": "tsx ./src/sendgrid-checks.ts",
+    "sendgrid:check": "tsx ./src/sendgrid-check.ts",
     "test:admin-access": "tsx ./src/admin-access-checks.ts",
     "test:phoenix-regression": "bash ./src/phoenix-regression.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -18,6 +20,7 @@
   "dependencies": {
     "@workspace/calendly": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/sendgrid": "workspace:*",
     "drizzle-orm": "catalog:"
   }
 }

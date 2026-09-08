@@ -15,6 +15,43 @@ type SchedulingStatus = {
 };
 type EventType = { uri: string; name: string; duration: number; schedulingUrl: string };
 
+type SenderAuthentication = "domain" | "single_sender" | "unverified" | "unknown";
+type EmailStatus = {
+  configured: boolean;
+  sandbox: boolean;
+  domain: string;
+  ready: boolean;
+  error?: string;
+  detail?: string;
+  senders: { key: string; email: string; name: string; replyTo: string; monitored: boolean; authentication: SenderAuthentication; onMailDomain: boolean }[];
+  domainAuthentication: {
+    id: number;
+    domain: string;
+    subdomain: string | null;
+    valid: boolean;
+    records: { name: string; type: string; host: string; data: string; valid: boolean }[];
+  } | null;
+};
+
+const SENDGRID_ERRORS: Record<string, string> = {
+  not_configured: "Add SENDGRID_API_KEY to Replit Secrets and restart the deployment.",
+  unauthorized: "SendGrid rejected the API key. Create a new one and update the secret.",
+  forbidden: "The API key works but lacks the scope for this. It needs Mail Send and Sender Authentication.",
+  sender_not_authenticated: "SendGrid will not send as that address yet — finish authenticating the domain.",
+  rate_limited: "SendGrid is rate-limiting us. Try again shortly.",
+  payload_rejected: "SendGrid refused the message itself.",
+  timeout: "SendGrid didn't respond in time.",
+  network: "Couldn't reach SendGrid from the server.",
+  upstream_error: "SendGrid returned an unexpected error.",
+};
+
+const AUTH_LABEL: Record<SenderAuthentication, string> = {
+  domain: "Domain authenticated",
+  single_sender: "Single sender verified",
+  unverified: "Not authenticated",
+  unknown: "Unknown",
+};
+
 const CALENDLY_ERRORS: Record<string, string> = {
   unauthorized: "The access token was rejected. Generate a new one in Calendly and update CALENDLY_PERSONAL_ACCESS_TOKEN.",
   forbidden_plan: "This Calendly plan doesn't include API access. The Scheduling API and webhooks need a paid plan.",
@@ -61,9 +98,8 @@ export default function IntegrationsPage() {
   if (!data) return null;
   const { webhooks } = data;
 
-  // Zapier/SendGrid/HubSpot remain unimplemented; Calendly below is live.
+  // Zapier and HubSpot remain unimplemented; Calendly and SendGrid below are live.
   const zapierInboundConfigured = false;
-  const sendgridConfigured = false;
   const hubspotConfigured = false;
 
   return (
@@ -104,32 +140,7 @@ export default function IntegrationsPage() {
             <pre className="payload-block">{samplePayload}</pre>
           </div>
 
-          {/* SendGrid */}
-          <div className="adm-card">
-            <div className="integration-head">
-              <div className="integration-id">
-                <span className="integration-logo" style={{ background: "#EAF0F6", color: "var(--ink)" }}>
-                  ✉
-                </span>
-                <div>
-                  <div className="name">SendGrid</div>
-                  <div className={`status ${sendgridConfigured ? "on" : "off"}`}>
-                    ● Unavailable until email delivery is connected
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-              <div className="sg-row">
-                <span>Intake confirmation → prospect</span>
-                <span>Unavailable</span>
-              </div>
-              <div className="sg-row">
-                <span>New-lead notification → Joshua</span>
-                <span>Unavailable</span>
-              </div>
-            </div>
-          </div>
+          <SendGridCard />
         </div>
 
         {/* HubSpot */}
@@ -177,9 +188,8 @@ export default function IntegrationsPage() {
 }
 
 /**
- * The one integration that actually does something. Credentials live in server
- * env vars and are never sent here — this only reads connection status and edits
- * the non-secret event type the funnel books against.
+ * Credentials live in server env vars and are never sent here — this only reads
+ * connection status and edits the non-secret event type the funnel books against.
  */
 function CalendlyCard() {
   const [saving, setSaving] = useState(false);
@@ -289,6 +299,133 @@ function CalendlyCard() {
           <div className="sg-row">
             <span>Account timezone</span>
             <span>{status.data.account.timezone}</span>
+          </div>
+          {notice && <div className="adm-subtle" style={{ marginTop: 10, fontSize: 12 }}>{notice}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Email delivery. Like Calendly, the API key stays on the server; this reads
+ * status only. The DNS records it shows are the exception, and deliberately so —
+ * they are public records the admin has to publish to make the domain send.
+ */
+function SendGridCard() {
+  const [sending, setSending] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const status = useQuery({
+    queryKey: ["email-status"],
+    queryFn: () => apiRequest<EmailStatus>("/email/status"),
+  });
+
+  const data = status.data;
+  const auth = data?.domainAuthentication;
+  const ready = Boolean(data?.ready);
+
+  const headline = () => {
+    if (status.isLoading) return "Checking…";
+    if (!data?.configured) return "Add SENDGRID_API_KEY to connect";
+    if (data.error) return SENDGRID_ERRORS[data.error] ?? `SendGrid returned: ${data.error}`;
+    if (ready) return `Sending as ${data.domain}`;
+    return "Connected — finish authenticating the domain";
+  };
+
+  const sendTest = async (key: string) => {
+    setSending(key);
+    setNotice("");
+    try {
+      const result = await apiRequest<{ to: string; sandbox: boolean }>("/email/test", {
+        method: "POST",
+        body: JSON.stringify({ from: key }),
+      });
+      setNotice(
+        result.sandbox
+          ? `SendGrid accepted the ${key} test and discarded it — sandbox mode is on.`
+          : `Test sent from ${key} to ${result.to}.`,
+      );
+    } catch {
+      setNotice(`Couldn't send the ${key} test. Check the sender's status above.`);
+    } finally {
+      setSending("");
+    }
+  };
+
+  return (
+    <div className="adm-card">
+      <div className="integration-head">
+        <div className="integration-id">
+          <span className="integration-logo" style={{ background: "#EAF0F6", color: "var(--ink)" }}>✉</span>
+          <div>
+            <div className="name">SendGrid</div>
+            <div className={`status ${ready ? "on" : "off"}`}>● {headline()}</div>
+          </div>
+        </div>
+      </div>
+
+      {data?.sandbox && (
+        <div className="conflict-rule" style={{ marginTop: 14 }}>
+          Sandbox mode is on (SENDGRID_SANDBOX). SendGrid validates every message and then discards it — nothing reaches an inbox.
+        </div>
+      )}
+
+      {data?.configured && (
+        <>
+          <div style={{ marginTop: 18, fontSize: 13, fontWeight: 700 }}>Domain authentication</div>
+          {!auth ? (
+            <div className="conflict-rule" style={{ marginTop: 10 }}>
+              No authentication for {data.domain} yet. In SendGrid: Settings → Sender Authentication → Authenticate Your Domain,
+              then publish the CNAME records it gives you. One domain authentication covers all three senders below.
+            </div>
+          ) : (
+            <>
+              <div className="sg-row" style={{ marginTop: 10 }}>
+                <span>{auth.domain}</span>
+                <span className={auth.valid ? "on" : undefined}>{auth.valid ? "Verified" : "DNS not verified yet"}</span>
+              </div>
+              {!auth.valid && auth.records.length > 0 && (
+                <>
+                  <div style={{ marginTop: 12, fontSize: 12, color: "#8A94A2" }}>Publish these records on the domain, then re-check:</div>
+                  <pre className="payload-block">
+                    {auth.records
+                      .map((record) => `${record.valid ? "✓" : "✗"} ${record.type.toUpperCase()}  ${record.host}  →  ${record.data}`)
+                      .join("\n")}
+                  </pre>
+                </>
+              )}
+            </>
+          )}
+
+          <div style={{ marginTop: 18, fontSize: 13, fontWeight: 700 }}>Senders</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+            {data.senders.map((sender) => (
+              <div className="sg-row" key={sender.key}>
+                <span>
+                  {sender.email}
+                  <span style={{ color: "#8A94A2" }}> · replies → {sender.replyTo}</span>
+                  {!sender.onMailDomain && <span style={{ color: "#8A94A2" }}> · off the authenticated domain</span>}
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  <span className={sender.authentication === "domain" || sender.authentication === "single_sender" ? "on" : undefined}>
+                    {AUTH_LABEL[sender.authentication]}
+                  </span>
+                  <button className="hs-dir" disabled={Boolean(sending)} onClick={() => void sendTest(sender.key)}>
+                    {sending === sender.key ? "Sending…" : "Send test"}
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="adm-subtle" style={{ marginTop: 10, fontSize: 12 }}>
+            A test goes to your own address, never anyone else&apos;s.
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button className="hs-dir" disabled={status.isFetching} onClick={() => void status.refetch()}>
+              {status.isFetching ? "Re-checking…" : "Re-check with SendGrid"}
+            </button>
           </div>
           {notice && <div className="adm-subtle" style={{ marginTop: 10, fontSize: 12 }}>{notice}</div>}
         </>
