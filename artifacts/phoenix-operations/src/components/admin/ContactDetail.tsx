@@ -88,7 +88,8 @@ export default function ContactDetail({ contact, initialActivities, stageName }:
 
   return (
     <section>
-      <Link href="/admin/contacts" className="adm-back">
+      {/* Relative to the nested /admin router: this is /admin/contacts. */}
+      <Link href="/contacts" className="adm-back">
         ← All contacts
       </Link>
       <div className="detail-grid">

@@ -110,13 +110,14 @@ export default function DashboardPage() {
       <div className="adm-card" style={{ marginTop: 16 }}>
         <div className="adm-title-row">
           <div className="adm-card-title">Newest qualified leads</div>
-          <Link href="/admin/contacts" className="adm-link-btn">
+          {/* Relative to the nested /admin router: /contacts is /admin/contacts. */}
+          <Link href="/contacts" className="adm-link-btn">
             View all →
           </Link>
         </div>
         <div style={{ marginTop: 12 }}>
           {hotLeads.map((c) => (
-            <Link key={c.id} href={`/admin/contacts/${c.id}`} className="lead-row">
+            <Link key={c.id} href={`/contacts/${c.id}`} className="lead-row">
               <div>
                 <div className="name">{c.name}</div>
                 <div className="company">{c.company}</div>

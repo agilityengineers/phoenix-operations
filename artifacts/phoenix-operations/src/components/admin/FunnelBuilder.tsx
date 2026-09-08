@@ -15,6 +15,7 @@ const STORY_ROLES: Array<{ key: keyof Funnel["storybrand"]; role: string }> = [
 ];
 
 export default function FunnelBuilder({ initial }: { initial: Funnel }) {
+  // Navigation is relative to the nested /admin router: "/funnels/x" is /admin/funnels/x.
   const [_, setLocation] = useLocation();
   const [funnel, setFunnel] = useState<Funnel>(initial);
   const [saving, setSaving] = useState(false);
@@ -66,7 +67,7 @@ export default function FunnelBuilder({ initial }: { initial: Funnel }) {
       
       if (savedFunnel) {
         if (funnel.id === "new") {
-          setLocation(`/admin/funnels/${savedFunnel.id}`);
+          setLocation(`/funnels/${savedFunnel.id}`);
         }
         setSavedAt(new Date().toLocaleTimeString());
       }
@@ -85,7 +86,8 @@ export default function FunnelBuilder({ initial }: { initial: Funnel }) {
 
   return (
     <section>
-      <Link href="/admin/funnels" className="adm-back">
+      {/* Relative to the nested /admin router: this is /admin/funnels. */}
+      <Link href="/funnels" className="adm-back">
         ← All funnels
       </Link>
       <div className="adm-title-row" style={{ marginTop: 10 }}>

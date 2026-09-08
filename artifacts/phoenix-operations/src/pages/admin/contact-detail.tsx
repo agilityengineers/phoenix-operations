@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { Redirect, useParams } from "wouter";
 import ContactDetail from "@/components/admin/ContactDetail";
 import { getStore } from "@/lib/store";
 import { Loader2 } from "lucide-react";
 
 export default function ContactDetailPage() {
   const params = useParams<{ id: string }>();
-  const [_, setLocation] = useLocation();
   const store = getStore();
 
   const { data, isLoading, isError } = useQuery({
@@ -29,8 +28,9 @@ export default function ContactDetailPage() {
   }
 
   if (isError || !data?.contact) {
-    setLocation("/admin/contacts");
-    return null;
+    // Relative to the nested /admin router, so this lands on /admin/contacts.
+    // <Redirect> navigates from an effect rather than mid-render.
+    return <Redirect to="/contacts" replace />;
   }
 
   const { contact, activities, pipelines } = data;

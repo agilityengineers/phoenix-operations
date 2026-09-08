@@ -1,20 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import AdminNav from "@/components/admin/AdminNav";
 import { getStore } from "@/lib/store";
-import { useSession } from "@/lib/session";
+import { activeWorkspaceSlug, useSession } from "@/lib/session";
+import { adminLoginHref, publicSiteHref } from "@/lib/site-links";
 import { roleLabel } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
 
 const basePath = () => import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [, setLocation] = useLocation();
   const { data: session, isLoading: sessionLoading } = useSession();
   useEffect(() => {
     if (!sessionLoading && !session) {
-      window.location.replace(`${basePath()}/admin/login`);
+      window.location.replace(adminLoginHref());
     }
   }, [session, sessionLoading]);
 
@@ -50,8 +49,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    setLocation("/login");
+    // A full navigation, like the unauthenticated redirect above: it leaves the
+    // nested /admin router cleanly and drops every cached query with the session.
+    window.location.replace(adminLoginHref());
   };
+  // The public site sits outside the nested /admin router, so these are plain
+  // anchors rather than <Link>s (a <Link href="/"> here would be the dashboard).
+  const siteHref = publicSiteHref("/", activeWorkspaceSlug(session));
 
   return (
     <div className="adm-shell">
@@ -80,9 +84,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="hint">Switch ({session.workspaces.length}) →</span>
           </a>
         )}
-        <Link href="/" className="adm-viewsite">
+        <a href={siteHref} className="adm-viewsite">
           ← View site
-        </Link>
+        </a>
         <button type="button" className="adm-viewsite" onClick={logout}>Sign out</button>
       </aside>
       <main className="adm-main">
