@@ -74,6 +74,14 @@ test("detail screens resolve under the same base", () => {
   assert.equal(matchedRoute("/admin/funnels/fn_7"), "matched:/funnels/:id");
 });
 
+test("your account is reachable from the sidebar profile button, without a menu item", () => {
+  // The profile button links to "/settings" from inside the nested router, so it
+  // has to resolve the same way a menu item would — and it must stay out of the
+  // menu, which is the workspace's screens rather than the person's.
+  assert.equal(matchedRoute("/admin/settings"), "matched:/settings");
+  assert.ok(!adminNavItems.some((item) => item.href === "/settings"), "Your account is not a menu item");
+});
+
 test("a doubled /admin prefix is the 404 page (the regression this guards against)", () => {
   assert.equal(matchedRoute("/admin/admin/funnels"), NONE);
   assert.equal(matchedRoute("/admin/admin"), NONE);

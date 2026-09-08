@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { Link } from "wouter";
 import AdminNav from "@/components/admin/AdminNav";
+import UserAvatar from "@/components/admin/UserAvatar";
 import { getStore } from "@/lib/store";
 import { activeWorkspaceSlug, useSession } from "@/lib/session";
 import { adminLoginHref, publicSiteHref } from "@/lib/site-links";
 import { roleLabel } from "@/lib/roles";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings } from "lucide-react";
 
 const basePath = () => import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -68,13 +70,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
         <AdminNav role={session.workspace.role ?? session.user.role} />
-        <div className="adm-user">
-          <img src={workspace.guide.photoUrl} alt="" width={34} height={34} style={{ borderRadius: '50%' }} />
-          <div>
+        {/*
+          The signed-in person, and the door to their own account. Their photo is
+          `session.user.avatarUrl` — never `workspace.guide.photoUrl`, which is the
+          brand's guide photo on the public site and is the same for every member,
+          so it used to show the owner's face to whoever was signed in. Anyone with
+          no photo of their own gets their initials.
+
+          A <Link>, so it stays inside the nested /admin router: "/settings" is
+          /admin/settings (see AdminNav).
+        */}
+        <Link href="/settings" className="adm-user" title="Your account" aria-label="Your account settings">
+          <UserAvatar name={session.user.name} email={session.user.email} src={session.user.avatarUrl} size={34} />
+          <div className="adm-user-who">
             <div className="name">{session.user.name}</div>
             <div className="role">{roleLabel(session.workspace.role ?? session.user.role)}</div>
           </div>
-        </div>
+          <Settings className="adm-user-hint" size={15} aria-hidden="true" />
+        </Link>
         {(session.workspaces?.length ?? 0) > 1 && (
           // A plain href, not a <Link>: this subtree runs inside the nested
           // /admin router, whose relative links would resolve to /admin/workspaces.

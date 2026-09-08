@@ -3,12 +3,13 @@ import { promisify } from "node:util";
 import { resolveTxt } from "node:dns/promises";
 import { Router, type IRouter, type Request, type RequestHandler } from "express";
 import { and, asc, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
-import { db, phoenixBootstrapTokens, phoenixMemberships, phoenixResetTokens, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, type PhoenixUser, type PhoenixUserInvite } from "@workspace/db";
+import { db, phoenixBootstrapTokens, phoenixMemberships, phoenixResetTokens, phoenixUserAvatars, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, type PhoenixUser, type PhoenixUserInvite } from "@workspace/db";
 import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigured as calendlyConfigured, isWebhookConfigured, listEventTypes, safeTimeZone, slotDayLabel, slotTimeLabel, timeZoneLabel, weekLabel, zonedDateKey } from "@workspace/calendly";
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
 import { bootstrapTokenHash, superAdminExists } from "../lib/phoenix-bootstrap";
 import { sendAdminInvitationEmail } from "../lib/phoenix-email";
+import { avatarUrl, readAvatarUpload } from "../lib/phoenix-avatar";
 import { assignableRoles, can, isRole, outranksOrEquals, rank, type Permission } from "../lib/phoenix-roles";
 
 const router: IRouter = Router();
@@ -114,6 +115,20 @@ const redeemInvite = async (
     await tx.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, invite.id));
     return { workspaceId: invite.workspace_id, slug: workspace.slug, name: workspaceName(workspace.state), role: invite.role };
   });
+/** URL of one account's profile photo, or null when it has none. */
+const avatarUrlOf = async (userId: string) => {
+  const [row] = await db.select({ updatedAt: phoenixUserAvatars.updatedAt }).from(phoenixUserAvatars).where(eq(phoenixUserAvatars.userId, userId)).limit(1);
+  return avatarUrl(userId, row?.updatedAt);
+};
+/**
+ * Whether two accounts sit in a workspace together. Profile photos are readable
+ * exactly that far: the member directory is per workspace, so the face beside a
+ * name is too, and nothing leaks across tenants.
+ */
+const sharesWorkspace = async (viewerId: string, otherId: string) => {
+  const rows = await db.execute(sql`SELECT 1 FROM phoenix_memberships mine JOIN phoenix_memberships theirs ON mine.workspace_id = theirs.workspace_id WHERE mine.user_id = ${viewerId} AND theirs.user_id = ${otherId} LIMIT 1`);
+  return rows.rows.length > 0;
+};
 /** Valid cookie plus a live account. Workspace access is a separate question, checked per route. */
 const signedIn: RequestHandler = async (req, res, next) => {
   if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "auth_unavailable" });
@@ -311,7 +326,7 @@ router.post("/auth/login", async (req, res) => {
   if (!setSession(res, { ...user, workspaceId: active.id, role: active.role })) return res.status(503).json({ error: "auth_unavailable" });
   res.json({ user: { id: user.id, email: user.email, name: user.name, role: active.role }, workspace: { id: active.id, name: active.name, role: active.role }, workspaces });
 });
-router.get("/auth/session", async (req, res) => { res.set("Cache-Control", "no-store"); const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, value.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === value.workspaceId); res.json({ user: { id: user.id, email: user.email, name: user.name, role }, workspace: { id: value.workspaceId, name: active?.name ?? "", role }, workspaces }); });
+router.get("/auth/session", async (req, res) => { res.set("Cache-Control", "no-store"); const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, value.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); const [workspaces, photo] = await Promise.all([workspacesFor(user), avatarUrlOf(user.id)]), active = workspaces.find(entry => entry.id === value.workspaceId); res.json({ user: { id: user.id, email: user.email, name: user.name, role, avatarUrl: photo }, workspace: { id: value.workspaceId, name: active?.name ?? "", role }, workspaces }); });
 router.post("/auth/logout", (_req, res) => res.clearCookie("po_session", { path: "/" }).json({ ok: true }));
 router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
 router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const tokenHash = capabilityHash(token, secret); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
@@ -346,6 +361,76 @@ router.post("/auth/workspace", csrfOrigin, signedIn, async (req, res) => {
   res.json({ user: { id: user.id, email: user.email, name: user.name, role }, workspace: { id: workspaceId, name: active?.name ?? "", role }, workspaces });
 });
 
+/*
+ * The signed-in person's own account: their name, their password, their photo.
+ * Deliberately outside the admin block below — role and workspace never come
+ * into it, so the thinnest partner seat owns its profile exactly as an admin does.
+ *
+ * A profile photo is not the workspace's guide photo. The guide photo is the
+ * brand's face on the public site and belongs to the workspace record; standing
+ * it in for a person is the bug this whole section exists to end.
+ */
+router.use("/me", csrfOrigin, signedIn);
+
+/** Renames the account. The member directory reads names from here, so it follows. */
+router.patch("/me", async (req, res) => {
+  const user = account(req), name = String(body(req).name ?? "").trim();
+  if (!name || name.length > 120) return res.status(400).json({ error: "invalid_name" });
+  await db.update(phoenixUsers).set({ name }).where(eq(phoenixUsers.id, user.id));
+  res.json({ user: { id: user.id, email: user.email, name } });
+});
+
+/**
+ * Changes the password, proving the current one first — the session cookie alone
+ * must not be enough, or a borrowed browser would be enough to lock its owner out.
+ * Sessions already issued elsewhere keep working: they are self-contained signed
+ * cookies with no server-side record to revoke.
+ */
+router.post("/me/password", async (req, res) => {
+  if (limited(req, "password-change", 10)) return res.status(429).json({ error: "rate_limited" });
+  const user = account(req), b = body(req), current = String(b.currentPassword ?? ""), next = String(b.newPassword ?? "");
+  if (!(await passwordMatches(current, user.passwordSalt, user.passwordHash))) return res.status(403).json({ error: "invalid_credentials" });
+  if (next.length < 8 || !/[a-z]/.test(next) || !/[A-Z]/.test(next) || !/\d/.test(next)) return res.status(400).json({ error: "weak_password" });
+  if (next === current) return res.status(400).json({ error: "password_unchanged" });
+  const record = await hashPassword(next);
+  await db.update(phoenixUsers).set({ passwordHash: record.hash, passwordSalt: record.salt }).where(eq(phoenixUsers.id, user.id));
+  res.json({ ok: true });
+});
+
+/** Replaces the profile photo with one square image, sniffed and size-capped. */
+router.put("/me/avatar", async (req, res) => {
+  const user = account(req), upload = readAvatarUpload(body(req).image);
+  if (typeof upload === "string") return res.status(400).json({ error: upload });
+  const updatedAt = new Date();
+  await db.insert(phoenixUserAvatars).values({ userId: user.id, ...upload, updatedAt })
+    .onConflictDoUpdate({ target: phoenixUserAvatars.userId, set: { ...upload, updatedAt } });
+  res.json({ avatarUrl: avatarUrl(user.id, updatedAt) });
+});
+
+/** Drops the photo. The UI falls back to initials, never to somebody else's face. */
+router.delete("/me/avatar", async (req, res) => {
+  await db.delete(phoenixUserAvatars).where(eq(phoenixUserAvatars.userId, account(req).id));
+  res.json({ avatarUrl: null });
+});
+
+/**
+ * Serves one account's photo to anyone who shares a workspace with them. The URL
+ * carries the row's version, so the bytes at a given URL never change and the
+ * response can be cached for a year — privately, since it is per person.
+ */
+router.get("/users/:id/avatar", signedIn, async (req, res) => {
+  const viewer = account(req), userId = String(req.params.id);
+  if (userId !== viewer.id && !(await sharesWorkspace(viewer.id, userId))) return res.status(404).json({ error: "not_found" });
+  const [row] = await db.select().from(phoenixUserAvatars).where(eq(phoenixUserAvatars.userId, userId)).limit(1);
+  if (!row) return res.status(404).json({ error: "not_found" });
+  const etag = `"${row.updatedAt.getTime()}"`;
+  // nosniff plus a sniffed content type: what is served is the format the bytes
+  // actually are, and the browser is told not to second-guess it.
+  res.set({ "Content-Type": row.contentType, "Content-Disposition": "inline", "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable", ETag: etag });
+  if (req.get("if-none-match") === etag) return res.status(304).end();
+  res.send(Buffer.from(row.data, "base64"));
+});
+
 router.get("/public/workspace", async (req, res) => { const value = await publicStore(req); res.json({ workspace: value.store.getWorkspace() }); });
 router.get("/public/funnels/:slug", async (req, res) => { const funnel = (await publicStore(req)).store.funnelBySlug(req.params.slug); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.get("/public/cms", async (req, res) => res.json({ pages: (await publicStore(req)).store.listCms() }));
@@ -369,13 +454,15 @@ router.get("/workspace", async (req, res) => res.json({ workspace: (await tenant
 router.get("/workspace/domain-status", requirePermission("workspace.manage"), async (req, res) => { const [row] = await db.select({ customDomain: phoenixWorkspaces.customDomain, pendingCustomDomain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken, verifiedAt: phoenixWorkspaces.customDomainVerifiedAt }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, identity(req).workspaceId)).limit(1); if (!row) return res.status(404).json({ error: "workspace_not_found" }); res.json({ state: row.pendingCustomDomain ? "pending" : row.customDomain ? "verified" : "none", domain: row.pendingCustomDomain ?? row.customDomain, verifiedAt: row.verifiedAt, ...(row.pendingCustomDomain && row.token ? { txtName: `_phoenix-verification.${row.pendingCustomDomain}`, txtValue: row.token } : {}) }); });
 router.post("/workspace/domain-verify", requirePermission("workspace.manage"), async (req, res) => { const workspaceId = identity(req).workspaceId, [row] = await db.select({ domain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, workspaceId)).limit(1); if (!row?.domain || !row.token) return res.status(400).json({ error: "no_pending_domain" }); let records: string[][]; try { records = await resolveTxt(`_phoenix-verification.${row.domain}`); } catch { return res.status(422).json({ error: "dns_verification_not_found", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); } if (!records.some(parts => parts.join("") === row.token)) return res.status(422).json({ error: "dns_verification_mismatch", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); try { const verifiedAt = new Date(), workspace = await db.transaction(async tx => { const locked = await tx.execute(sql`SELECT state, pending_custom_domain, domain_verification_token FROM phoenix_workspaces WHERE id = ${workspaceId} FOR UPDATE`), current = locked.rows[0] as { state: Record<string, unknown>; pending_custom_domain: string | null; domain_verification_token: string | null } | undefined; if (!current || current.pending_custom_domain !== row.domain || current.domain_verification_token !== row.token) throw new Error("domain_changed"); const store = new PhoenixStore(current.state), ws = store.getWorkspace(); store.updateWorkspace({ domain: row.domain, brand: { ...ws.brand, customDomain: row.domain } }); await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), customDomain: row.domain, pendingCustomDomain: null, domainVerificationToken: null, customDomainVerifiedAt: verifiedAt, updatedAt: verifiedAt }).where(eq(phoenixWorkspaces.id, workspaceId)); return store.getWorkspace(); }); res.json({ state: "verified", domain: row.domain, verifiedAt, workspace }); } catch (err) { if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "domain_taken" }); if ((err as Error).message === "domain_changed") return res.status(409).json({ error: "domain_changed" }); throw err; } });
 /** Members are the accounts seated here through phoenix_memberships, plus invitations still open. Logins carry a `usr_` id, pending invitations an `inv_` id. */
-type MemberRow = { id: string; workspaceId: string; name: string; email: string; role: string; state: "active" | "invited"; createdAt: string; inviteExpiresAt?: string };
-const activeMember = (seat: { id: string; workspaceId: string; name: string; email: string; role: string; joinedAt: Date }): MemberRow => ({ id: seat.id, workspaceId: seat.workspaceId, name: seat.name, email: seat.email, role: seat.role, state: "active", createdAt: seat.joinedAt.toISOString() });
-const invitedMember = (invite: { id: string; workspaceId: string; email: string; role: string; createdAt: Date; expiresAt: Date }): MemberRow => ({ id: invite.id, workspaceId: invite.workspaceId, name: invite.email.split("@")[0], email: invite.email, role: invite.role, state: "invited", createdAt: invite.createdAt.toISOString(), inviteExpiresAt: invite.expiresAt.toISOString() });
+type MemberRow = { id: string; workspaceId: string; name: string; email: string; role: string; state: "active" | "invited"; createdAt: string; avatarUrl: string | null; inviteExpiresAt?: string };
+const activeMember = (seat: { id: string; workspaceId: string; name: string; email: string; role: string; joinedAt: Date; avatarUpdatedAt: Date | null }): MemberRow => ({ id: seat.id, workspaceId: seat.workspaceId, name: seat.name, email: seat.email, role: seat.role, state: "active", createdAt: seat.joinedAt.toISOString(), avatarUrl: avatarUrl(seat.id, seat.avatarUpdatedAt) });
+const invitedMember = (invite: { id: string; workspaceId: string; email: string; role: string; createdAt: Date; expiresAt: Date }): MemberRow => ({ id: invite.id, workspaceId: invite.workspaceId, name: invite.email.split("@")[0], email: invite.email, role: invite.role, state: "invited", createdAt: invite.createdAt.toISOString(), avatarUrl: null, inviteExpiresAt: invite.expiresAt.toISOString() });
 const pendingInvite = (workspaceId: string, id?: string) => and(eq(phoenixUserInvites.workspaceId, workspaceId), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt), gt(phoenixUserInvites.expiresAt, new Date()), ...(id ? [eq(phoenixUserInvites.id, id)] : []));
 const byRankThenName = (a: MemberRow, b: MemberRow) => rank(b.role) - rank(a.role) || a.name.localeCompare(b.name);
-const seatColumns = { id: phoenixUsers.id, workspaceId: phoenixMemberships.workspaceId, name: phoenixUsers.name, email: phoenixUsers.email, role: phoenixMemberships.role, joinedAt: phoenixMemberships.createdAt, homeWorkspaceId: phoenixUsers.workspaceId };
-const seatsIn = (workspaceId: string) => db.select(seatColumns).from(phoenixMemberships).innerJoin(phoenixUsers, eq(phoenixUsers.id, phoenixMemberships.userId)).where(eq(phoenixMemberships.workspaceId, workspaceId));
+const seatColumns = { id: phoenixUsers.id, workspaceId: phoenixMemberships.workspaceId, name: phoenixUsers.name, email: phoenixUsers.email, role: phoenixMemberships.role, joinedAt: phoenixMemberships.createdAt, homeWorkspaceId: phoenixUsers.workspaceId, avatarUpdatedAt: phoenixUserAvatars.updatedAt };
+// Left-joined on the version column alone: the directory learns whether a seat
+// has a photo, and at which version, without dragging any image bytes along.
+const seatsIn = (workspaceId: string) => db.select(seatColumns).from(phoenixMemberships).innerJoin(phoenixUsers, eq(phoenixUsers.id, phoenixMemberships.userId)).leftJoin(phoenixUserAvatars, eq(phoenixUserAvatars.userId, phoenixUsers.id)).where(eq(phoenixMemberships.workspaceId, workspaceId));
 /** One member's seat here, joined to the account that holds it. */
 const seatOf = async (workspaceId: string, userId: string) => { const [row] = await seatsIn(workspaceId).$dynamic().where(and(eq(phoenixMemberships.workspaceId, workspaceId), eq(phoenixMemberships.userId, userId))).limit(1); return row ?? null; };
 router.get("/members", async (req, res) => {
@@ -537,7 +624,10 @@ router.delete("/members/:id", async (req, res) => {
     if (seat.homeWorkspaceId !== seat.workspaceId) return false;
     const [next] = await tx.select({ workspaceId: phoenixMemberships.workspaceId, role: phoenixMemberships.role }).from(phoenixMemberships).where(eq(phoenixMemberships.userId, seat.id)).orderBy(asc(phoenixMemberships.createdAt)).limit(1);
     if (next) { await tx.update(phoenixUsers).set({ workspaceId: next.workspaceId, role: next.role }).where(eq(phoenixUsers.id, seat.id)); return false; }
+    // Everything that references the account has to go with it, or its own
+    // foreign keys refuse the delete.
     await tx.delete(phoenixResetTokens).where(eq(phoenixResetTokens.userId, seat.id));
+    await tx.delete(phoenixUserAvatars).where(eq(phoenixUserAvatars.userId, seat.id));
     await tx.delete(phoenixUsers).where(eq(phoenixUsers.id, seat.id));
     return true;
   });

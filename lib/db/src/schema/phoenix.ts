@@ -71,6 +71,25 @@ export const phoenixResetTokens = pgTable("phoenix_reset_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * One profile photo per account, held as base64 image bytes rather than a URL.
+ * There is no object store in this deployment, and a photo is small and read
+ * far more often than it is written, so a TOASTed text column is the cheapest
+ * place to keep it — and it stays with the account across every workspace.
+ *
+ * Its own table, not a column on phoenix_users, so the hot path (every request
+ * loads the signed-in account row) never drags a photo along with it.
+ */
+export const phoenixUserAvatars = pgTable("phoenix_user_avatars", {
+  userId: text("user_id").primaryKey().references(() => phoenixUsers.id),
+  /** Sniffed from the bytes on upload, never trusted from the client. */
+  contentType: text("content_type").notNull(),
+  /** Base64 image bytes, without a data: prefix. */
+  data: text("data").notNull(),
+  /** Doubles as the cache-busting version in the photo's URL. */
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const phoenixBootstrapTokens = pgTable("phoenix_bootstrap_tokens", {
   id: text("id").primaryKey(),
   tokenHash: text("token_hash").notNull().unique(),
@@ -84,3 +103,4 @@ export type PhoenixWorkspace = typeof phoenixWorkspaces.$inferSelect;
 export type PhoenixUser = typeof phoenixUsers.$inferSelect;
 export type PhoenixMembership = typeof phoenixMemberships.$inferSelect;
 export type PhoenixUserInvite = typeof phoenixUserInvites.$inferSelect;
+export type PhoenixUserAvatar = typeof phoenixUserAvatars.$inferSelect;

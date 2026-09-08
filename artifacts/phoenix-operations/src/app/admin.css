@@ -73,17 +73,35 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s;
 }
-.adm-user img {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  object-fit: cover;
-  object-position: top;
+.adm-user:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.adm-user:hover .adm-user-hint {
+  color: #fff;
+}
+.adm-user-who {
+  min-width: 0;
+}
+.adm-user-who .name,
+.adm-user-who .role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-user-hint {
+  flex: none;
+  margin-left: auto;
+  color: var(--faint-blue-2);
 }
 .adm-user .name {
   font-size: 13px;
   font-weight: 600;
+  /* Explicit, so the global `a:hover` colour never repaints the person's name. */
+  color: #fff;
 }
 .adm-user .role {
   font-size: 11px;
@@ -1181,6 +1199,12 @@
   padding: 6px 14px;
   white-space: nowrap;
 }
+.member-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 .member-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
@@ -1582,4 +1606,77 @@
   margin-top: 3px;
   font-size: 11px;
   color: var(--muted-3);
+}
+
+/* One person's face. `.fallback` is their initials, shown when they have no
+   photo — the one thing that must never be somebody else's picture. */
+.user-avatar {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+  background: var(--border-2);
+}
+.user-avatar.fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--orange);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Your account */
+.settings-photo-row {
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.settings-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.settings-photo-actions p {
+  flex-basis: 100%;
+  line-height: 1.55;
+}
+.settings-note {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.settings-note.ok {
+  color: var(--success);
+}
+.settings-note.error {
+  color: var(--danger);
+}
+.settings-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--border-4);
+}
+.settings-facts .label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-3);
+}
+.settings-facts .value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 3px;
 }
