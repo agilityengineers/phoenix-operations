@@ -54,3 +54,9 @@ jobs:
       # can be proven on every PR.
       - name: Calendly checks
         run: pnpm --filter @workspace/scripts run test:calendly
+
+      # The admin shell is a nested wouter router: every sidebar item and
+      # in-admin link has to resolve to a registered admin screen. Pure render
+      # checks — no browser, no network, no credentials.
+      - name: Admin routing checks
+        run: pnpm --filter @workspace/phoenix-operations run test

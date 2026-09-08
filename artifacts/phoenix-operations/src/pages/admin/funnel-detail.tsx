@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { Redirect, useParams } from "wouter";
 import FunnelBuilder from "@/components/admin/FunnelBuilder";
 import { getStore } from "@/lib/store";
 import type { Funnel } from "@/lib/types";
@@ -35,7 +35,6 @@ function blankFunnel(): Funnel {
 
 export default function BuilderPage() {
   const params = useParams<{ id: string }>();
-  const [_, setLocation] = useLocation();
   const store = getStore();
 
   const { data: funnel, isLoading, isError } = useQuery({
@@ -52,8 +51,9 @@ export default function BuilderPage() {
   }
 
   if (isError || !funnel) {
-    setLocation("/admin/funnels");
-    return null;
+    // Relative to the nested /admin router, so this lands on /admin/funnels.
+    // <Redirect> navigates from an effect rather than mid-render.
+    return <Redirect to="/funnels" replace />;
   }
 
   return <FunnelBuilder initial={funnel} />;

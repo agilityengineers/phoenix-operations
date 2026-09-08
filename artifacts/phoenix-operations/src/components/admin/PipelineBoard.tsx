@@ -15,6 +15,7 @@ type Props = {
 };
 
 export default function PipelineBoard({ pipelines, initialContacts }: Props) {
+  // Navigation is relative to the nested /admin router: "/contacts/x" is /admin/contacts/x.
   const [_, setLocation] = useLocation();
   const [pipelineId, setPipelineId] = useState<string>(pipelines[0]?.id ?? "prospects");
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -227,7 +228,7 @@ export default function PipelineBoard({ pipelines, initialContacts }: Props) {
                       setDraggingId(c.id);
                     }}
                     onDragEnd={() => setDraggingId(null)}
-                    onClick={() => setLocation(`/admin/contacts/${c.id}`)}
+                    onClick={() => setLocation(`/contacts/${c.id}`)}
                   >
                     <div className="head">
                       <div className="name">{c.name}</div>

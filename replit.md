@@ -10,6 +10,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/scripts run test:calendly` — check the Calendly webhook signature verifier and slot formatters (no network, no credentials)
+- `pnpm --filter @workspace/phoenix-operations run test` — admin routing checks: every sidebar item and in-admin link resolves to a registered admin screen, and the highlighted item follows the URL (no browser, no database)
 - `pnpm --filter @workspace/scripts run test:admin-access` — release check for super-admin login, invitations and their dead-link statuses, the member directory, the rank rules, and multi-workspace membership. Needs `DATABASE_URL`, `SESSION_SECRET`, a running app (`ADMIN_CHECK_BASE_URL`, default `http://localhost:80`) and `chromium` on `PATH` (set `ADMIN_CHECK_SKIP_BROWSER=1` to skip the rendered-page checks); it creates and cleans up its own throwaway workspaces
 - `pnpm --filter @workspace/scripts run calendly:subscribe` — list Calendly webhook subscriptions; `create --url https://<host>/api/webhooks/calendly` sets one up and prints the signing key, `delete <uuid>` removes one. Needs `CALENDLY_PERSONAL_ACCESS_TOKEN`.
 - Required env: `DATABASE_URL` — Postgres connection string
@@ -19,8 +20,8 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## CI
 
-`.github/workflows/ci.yml` runs install, `typecheck`, `build` and `test:calendly` on every pull
-request and on pushes to `main`. It needs no secrets — none of those steps touch Calendly or the
+`.github/workflows/ci.yml` runs install, `typecheck`, `build`, `test:calendly` and the admin routing
+checks on every pull request and on pushes to `main`. It needs no secrets — none of those steps touch Calendly or the
 database — so it is safe on fork pull requests.
 
 **Use pnpm 10 (pinned to 10.15.1).** Not a preference: pnpm 12 fails this workspace with
@@ -165,6 +166,14 @@ so a role differs per workspace and a change takes effect on the next request.
 
 ## Gotchas
 
+- The admin shell is mounted with `<Route path="/admin" nest>`, so wouter resolves every `<Link>`,
+  `setLocation`, `<Redirect>` and `useLocation()` value inside it *relative to `/admin`*: write
+  `/contacts`, never `/admin/contacts` — that becomes `/admin/admin/contacts` and renders the 404 page,
+  which is exactly how the sidebar shipped broken after the Next.js migration (typed URLs worked, clicks
+  did not). Screens are registered in `pages/admin/routes.tsx` and listed in `AdminNav`; add to both, and
+  `routes.test.tsx` fails on any item that does not reach its route. Links that leave the admin (View
+  site, View page, the sign-in page) are plain anchors from `lib/site-links.ts`, because wouter's `~/`
+  absolute form ignores Vite's base path.
 - The seeded workspace is inserted with `onConflictDoNothing()`, so editing the seed defaults
   changes nothing for a workspace that already exists. Correcting live values (the site domain,
   say) has to happen through the admin UI, not a deploy.
