@@ -1183,11 +1183,25 @@
 }
 .member-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   gap: 14px;
   align-items: center;
   padding: 12px 0;
   border-top: 1px solid var(--border-4);
+}
+.member-revoke {
+  background: none;
+  border: 1px solid var(--border-3);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted-3);
+  cursor: pointer;
+}
+.member-revoke:hover {
+  border-color: #c2410c;
+  color: #c2410c;
 }
 .member-row .name {
   font-size: 14px;
@@ -1534,4 +1548,38 @@
   .lead-row .cell {
     display: none;
   }
+}
+
+/* Workspace switcher — only rendered when the account belongs to more than one. */
+.adm-workspace-switch {
+  display: block;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-3);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.adm-workspace-switch:hover {
+  border-color: var(--muted-3);
+}
+.adm-workspace-switch .label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-3);
+}
+.adm-workspace-switch .value {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.adm-workspace-switch .hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted-3);
 }

@@ -58,13 +58,21 @@ export interface Member {
   name: string;
   email: string;
   role: Role;
-  state: "active" | "invited";
+  state: "active" | "invited" | "revoked";
   invitePath?: string;
   inviteExpiresAt?: string;
   inviteDelivery?: {
     status: "sent" | "failed";
     reason?: "email_not_configured" | "provider_rejected" | "provider_unavailable";
   };
+}
+
+/** One workspace the signed-in account may enter, and the role it holds there. */
+export interface WorkspaceMembership {
+  id: string;
+  slug: string;
+  name: string;
+  role: Role;
 }
 
 export interface StoryBrand {

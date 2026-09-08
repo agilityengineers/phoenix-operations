@@ -10,6 +10,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/scripts run test:calendly` — check the Calendly webhook signature verifier and slot formatters (no network, no credentials)
+- `pnpm --filter @workspace/scripts run test:admin-access` — release check for admin login, invitations, and multi-workspace membership. Needs `DATABASE_URL`, `SESSION_SECRET`, a running app (`ADMIN_CHECK_BASE_URL`, default `http://localhost:80`) and `chromium` on `PATH`; it creates and cleans up its own throwaway workspaces
 - `pnpm --filter @workspace/scripts run calendly:subscribe` — list Calendly webhook subscriptions; `create --url https://<host>/api/webhooks/calendly` sets one up and prints the signing key, `delete <uuid>` removes one. Needs `CALENDLY_PERSONAL_ACCESS_TOKEN`.
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `SESSION_SECRET` — signs session cookies and the single-use booking/reset/invite capability tokens. Auth, intake submission and booking all return 503 without it; there is deliberately no fallback, because a guessable secret would make those tokens forgeable.
@@ -101,6 +102,32 @@ Two of these hard-fail if done out of order.
    request, so no rebuild is needed.
 6. **Admin → Integrations**: pick the event type and switch it on. Both are required —
    `schedulingLive` needs the token *and* `enabled` *and* `eventTypeUri`.
+
+## Workspace membership
+
+One person, one account, many workspaces. `phoenix_users` holds the identity (email
+unique) and its **home** workspace; `phoenix_memberships` holds *access* — one row per
+(user, workspace) with the role held there. The session cookie names the active
+workspace, and every admin request re-reads the role from the membership for that pair,
+so a role differs per workspace and a change takes effect on the next request.
+
+- **Accepting an invitation never replaces access.** `POST /auth/signup` mints a new
+  identity and refuses a known email with `account_exists`; a returning user signs in and
+  calls `POST /auth/invitation/accept`, which adds a membership and leaves every other one
+  alone. Both paths run inside one transaction that locks the invitation row, so a token
+  cannot be spent twice.
+- **Choosing where to work.** `POST /auth/login` lands in the home workspace and returns
+  the full `workspaces` list; `/workspaces` is the picker, and `POST /auth/workspace`
+  re-issues the cookie for another workspace the account already belongs to.
+- **Rejections.** Wrong-email, used, expired and revoked invitations all fail closed.
+  Revocation is `POST /members/invite/revoke` (owner/admin) — it stamps `revoked_at` on
+  every pending invitation for that address, so the link keeps its shape but buys nothing.
+- **Backfill.** `ensurePhoenixSchema()` writes a membership for every user's home
+  workspace on each boot (idempotent). Until it runs, the home workspace on the user row
+  still counts as an implicit membership, so accounts predating the table keep working.
+- **Only owners and admins can load the admin shell** — `GET /workspace` is role-gated, so
+  a staff or partner invitee accepts successfully but then sees "Workspace unavailable".
+  That predates multi-workspace membership and is not fixed here.
 
 ## Gotchas
 

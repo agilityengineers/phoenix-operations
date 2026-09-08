@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 import AuthShell from "@/components/auth/AuthShell";
+import {
+  authErrorMessage,
+  fetchInvitation,
+  inviteTokenFromUrl,
+  roleLabel,
+  type InvitationPreview,
+} from "@/lib/auth";
 
 // 3-step self-service workspace signup:
 //   1) account (name, email, password)
@@ -17,7 +24,8 @@ const PLANS = [
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
-  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
+  const [inviteToken] = useState(inviteTokenFromUrl);
+  const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "",
@@ -30,10 +38,32 @@ export default function SignupPage() {
   });
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  // Set when the invited address already has an account. Signup cannot help
+  // there — the workspace has to be added to that identity instead of a new one.
+  const [existingAccount, setExistingAccount] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    void fetchInvitation(inviteToken).then((preview) => {
+      if (cancelled) return;
+      if (!preview) {
+        setError(authErrorMessage("invalid_or_expired_invite"));
+        return;
+      }
+      setInvitation(preview);
+      setExistingAccount(preview.accountExists);
+      setForm((f) => ({ ...f, email: f.email || preview.email }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken]);
 
   const set = (key: keyof typeof form, value: string) => {
     setError("");
+    if (key === "email") setExistingAccount(false);
     setForm((f) => ({ ...f, [key]: value }));
   };
 
@@ -47,11 +77,13 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, ...(inviteToken ? { inviteToken } : {}) }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Unable to create workspace." }))).error);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "request_failed" }))).error);
       setDone(true);
       setLocation("/admin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create workspace.");
+      const code = err instanceof Error ? err.message : "request_failed";
+      if (code === "account_exists" || code === "email_taken") setExistingAccount(true);
+      setError(authErrorMessage(code));
     } finally {
       setBusy(false);
     }
@@ -89,9 +121,11 @@ export default function SignupPage() {
           <div>
             <h1 style={{ margin: 0 }}>{inviteToken ? "Accept your workspace invitation" : "Create your partner workspace"}</h1>
             <p className="auth-sub">
-              {inviteToken
-                ? "Create your account to join the workspace with the role selected by its administrator."
-                : "Start a workspace for your white-labeled funnels, CRM, and guide page. No invite code is required."}
+              {invitation
+                ? `${invitation.workspace.name} invited ${invitation.email} to join as ${roleLabel(invitation.role)}. Create your account to accept.`
+                : inviteToken
+                  ? "Create your account to join the workspace with the role selected by its administrator."
+                  : "Start a workspace for your white-labeled funnels, CRM, and guide page. No invite code is required."}
             </p>
           </div>
           <span className="signup-step">Step {step} of {inviteToken ? 1 : 3}</span>
@@ -99,6 +133,16 @@ export default function SignupPage() {
         <div className="signup-progress">
           <div style={{ width: inviteToken ? "100%" : `${step * 33.4}%` }} />
         </div>
+
+        {invitation?.accountExists && !error && (
+          <div className="ws-invite-note" style={{ marginTop: 16 }}>
+            {invitation.email} already has an account.{" "}
+            <Link href={`/login?invite=${encodeURIComponent(inviteToken)}`} className="auth-link">
+              Sign in to add {invitation.workspace.name}
+            </Link>{" "}
+            — you keep the workspaces you already use.
+          </div>
+        )}
 
         {step === 1 && (
           <div className="signup-grid">
@@ -207,6 +251,18 @@ export default function SignupPage() {
         {error && (
           <div className="auth-error" style={{ marginTop: 16 }}>
             {error}
+            {existingAccount && (
+              <>
+                {" "}
+                <Link
+                  href={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : "/login"}
+                  className="auth-link"
+                >
+                  {inviteToken ? "Sign in to add this workspace" : "Sign in instead"}
+                </Link>
+                {inviteToken ? " — your current workspaces stay as they are." : ""}
+              </>
+            )}
           </div>
         )}
 

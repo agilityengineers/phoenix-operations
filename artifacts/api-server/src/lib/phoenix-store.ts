@@ -100,10 +100,21 @@ export class PhoenixStore {
   listMembers() { return clone(this.members); }
   invite(email: string, role: string, workspaceId = this.workspace.id) { const member = { id: this.next("m"), workspaceId, name: email.split("@")[0], email, role, state: "invited" }; this.members.push(member); return clone(member); }
   acceptInvite(email: string, name: string, role: string, workspaceId = this.workspace.id) {
-    const member = this.members.find(value => value.email.toLowerCase() === email.toLowerCase() && value.state === "invited");
+    const needle = email.toLowerCase();
+    // Match an already-active row first: a returning user accepting a second
+    // invitation must update their existing seat, not gain a duplicate one.
+    const member = this.members.find(value => value.email.toLowerCase() === needle && value.state !== "revoked");
     if (member) Object.assign(member, { workspaceId, name, role, state: "active" });
     else this.members.push({ id: this.next("m"), workspaceId, name, email, role, state: "active" });
     return clone(member ?? this.members[this.members.length - 1]);
+  }
+  /** Marks the directory row for a withdrawn invitation. Active seats are left alone. */
+  revokeInvite(email: string) {
+    const needle = email.toLowerCase();
+    const member = this.members.find(value => value.email.toLowerCase() === needle && value.state === "invited");
+    if (!member) return null;
+    member.state = "revoked";
+    return clone(member);
   }
   toggle(pageId: string, sectionId: string, enabled: boolean) { this.cms.find(p => p.id === pageId)?.sections.find(s => s.id === sectionId) && (this.cms.find(p => p.id === pageId)!.sections.find(s => s.id === sectionId)!.enabled = enabled); }
   listCms() { return clone(this.cms); }

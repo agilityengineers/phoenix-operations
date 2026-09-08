@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { resolveTxt } from "node:dns/promises";
 import { Router, type IRouter, type Request, type RequestHandler } from "express";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { db, phoenixBootstrapTokens, phoenixResetTokens, phoenixUserInvites, phoenixUsers, phoenixWorkspaces } from "@workspace/db";
+import { db, phoenixBootstrapTokens, phoenixMemberships, phoenixResetTokens, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, type PhoenixUser, type PhoenixUserInvite } from "@workspace/db";
 import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigured as calendlyConfigured, isWebhookConfigured, listEventTypes, safeTimeZone, slotDayLabel, slotTimeLabel, timeZoneLabel, weekLabel, zonedDateKey } from "@workspace/calendly";
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
@@ -42,7 +42,92 @@ const setSession = (res: any, user: { id: string; email: string; workspaceId: st
 };
 const hashPassword = async (password: string, salt = randomBytes(16).toString("base64url")) => ({ salt, hash: (await scryptAsync(password, salt, 64) as Buffer).toString("base64url") });
 const passwordMatches = async (password: string, salt: string, hash: string) => { const derived = Buffer.from((await scryptAsync(password, salt, 64) as Buffer).toString("base64url")); const saved = Buffer.from(hash); return derived.length === saved.length && timingSafeEqual(derived, saved); };
-const adminOnly: RequestHandler = async (req, res, next) => { const signed = session(req); if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "admin_api_disabled" }); if (!signed) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1); if (!user || user.workspaceId !== signed.workspaceId) return res.status(401).json({ error: "unauthorized" }); (req as Request & { phoenixSession: Session }).phoenixSession = { ...signed, email: user.email, role: user.role }; next(); };
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type WorkspaceSummary = { id: string; slug: string; name: string; role: string };
+/** Just enough of an account to resolve access: its id and its home workspace. */
+type AccountAccess = Pick<PhoenixUser, "id" | "workspaceId" | "role">;
+const workspaceName = (state: unknown) => new PhoenixStore(state as Record<string, unknown>).getWorkspace().name;
+/**
+ * Role this account holds in one workspace, or null when it holds none. The home
+ * workspace on the user row counts as an implicit membership, so accounts created
+ * before phoenix_memberships existed keep working even ahead of its backfill.
+ */
+const roleInWorkspace = async (user: AccountAccess, workspaceId: string) => {
+  if (!workspaceId) return null;
+  const [row] = await db.select({ role: phoenixMemberships.role }).from(phoenixMemberships).where(and(eq(phoenixMemberships.userId, user.id), eq(phoenixMemberships.workspaceId, workspaceId))).limit(1);
+  return row?.role ?? (user.workspaceId === workspaceId ? user.role : null);
+};
+/** Every workspace this account may enter, oldest membership first, home workspace always included. */
+const workspacesFor = async (user: AccountAccess): Promise<WorkspaceSummary[]> => {
+  const rows = await db
+    .select({ id: phoenixWorkspaces.id, slug: phoenixWorkspaces.slug, state: phoenixWorkspaces.state, role: phoenixMemberships.role, joinedAt: phoenixMemberships.createdAt })
+    .from(phoenixMemberships)
+    .innerJoin(phoenixWorkspaces, eq(phoenixWorkspaces.id, phoenixMemberships.workspaceId))
+    .where(eq(phoenixMemberships.userId, user.id));
+  const summaries = rows
+    .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime())
+    .map(row => ({ id: row.id, slug: row.slug, name: workspaceName(row.state), role: row.role }));
+  if (summaries.some(value => value.id === user.workspaceId)) return summaries;
+  const [home] = await db.select().from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, user.workspaceId)).limit(1);
+  return home ? [{ id: home.id, slug: home.slug, name: workspaceName(home.state), role: user.role }, ...summaries] : summaries;
+};
+/** Adds workspace access without disturbing any the account already holds. */
+const grantMembership = (tx: DbTx, userId: string, workspaceId: string, role: string) =>
+  tx.insert(phoenixMemberships)
+    .values({ id: `mem_${randomUUID()}`, userId, workspaceId, role })
+    .onConflictDoUpdate({ target: [phoenixMemberships.userId, phoenixMemberships.workspaceId], set: { role } });
+const inviteByToken = async (token: string, secret: string) => {
+  if (!token) return null;
+  const [row] = await db.select().from(phoenixUserInvites).where(eq(phoenixUserInvites.tokenHash, capabilityHash(token, secret))).limit(1);
+  return row ?? null;
+};
+/** An invitation is spendable only while unused, unrevoked and unexpired. */
+const inviteOpen = (invite: PhoenixUserInvite | null): invite is PhoenixUserInvite =>
+  Boolean(invite && !invite.usedAt && !invite.revokedAt && invite.expiresAt > new Date());
+const sameEmail = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+type RedeemedInvite = { workspaceId: string; slug: string; name: string; role: string };
+/**
+ * Spends an invitation for one account and adds the invited workspace to it.
+ * Everything happens under a row lock on the invitation itself, so two racing
+ * redemptions cannot both succeed, and nothing here touches the account's home
+ * workspace or its other memberships — access is only ever added.
+ *
+ * `createAccount` lets first-time signup insert its brand new user row inside the
+ * same transaction, so a failed redemption leaves no orphaned account behind.
+ */
+const redeemInvite = async (
+  inviteId: string,
+  account: { id: string; email: string; name: string },
+  createAccount?: (tx: DbTx, workspaceId: string, role: string) => Promise<unknown>,
+): Promise<RedeemedInvite | "invalid" | "email_mismatch" | "workspace_missing"> =>
+  db.transaction(async tx => {
+    const locked = await tx.execute(sql`SELECT id, workspace_id, email, role FROM phoenix_user_invites WHERE id = ${inviteId} AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now() FOR UPDATE`);
+    const invite = locked.rows[0] as { id: string; workspace_id: string; email: string; role: string } | undefined;
+    if (!invite) return "invalid" as const;
+    if (!sameEmail(invite.email, account.email)) return "email_mismatch" as const;
+    const workspaceRows = await tx.execute(sql`SELECT id, slug, state FROM phoenix_workspaces WHERE id = ${invite.workspace_id} FOR UPDATE`);
+    const workspace = workspaceRows.rows[0] as { id: string; slug: string; state: Record<string, unknown> } | undefined;
+    if (!workspace) return "workspace_missing" as const;
+    const store = new PhoenixStore(workspace.state);
+    store.acceptInvite(account.email, account.name, invite.role, invite.workspace_id);
+    await createAccount?.(tx, invite.workspace_id, invite.role);
+    await grantMembership(tx, account.id, invite.workspace_id, invite.role);
+    await tx.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, invite.id));
+    await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), updatedAt: new Date() }).where(eq(phoenixWorkspaces.id, invite.workspace_id));
+    return { workspaceId: invite.workspace_id, slug: workspace.slug, name: store.getWorkspace().name, role: invite.role };
+  });
+/** Valid cookie plus a live account. Workspace access is a separate question, checked per route. */
+const signedIn: RequestHandler = async (req, res, next) => {
+  if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "auth_unavailable" });
+  const signed = session(req);
+  if (!signed) return res.status(401).json({ error: "unauthorized" });
+  const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1);
+  if (!user) return res.status(401).json({ error: "unauthorized" });
+  (req as Request & { phoenixUser: PhoenixUser }).phoenixUser = user;
+  next();
+};
+const account = (req: Request) => (req as Request & { phoenixUser: PhoenixUser }).phoenixUser;
+const adminOnly: RequestHandler = async (req, res, next) => { const signed = session(req); if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "admin_api_disabled" }); if (!signed) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, signed.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); (req as Request & { phoenixSession: Session }).phoenixSession = { ...signed, email: user.email, role }; next(); };
 const identity = (req: Request) => (req as Request & { phoenixSession: Session }).phoenixSession;
 const slug = (value: unknown) => typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) ? value : null;
 const customHost = (value: unknown) => {
@@ -103,6 +188,7 @@ router.post("/auth/bootstrap", async (req, res) => {
       const record = locked.rows[0] as { id: string } | undefined;
       if (!record) return "invalid_token" as const;
       await tx.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
+      await grantMembership(tx, user.id, WORKSPACE_ID, user.role);
       await tx.update(phoenixBootstrapTokens).set({ consumedAt: new Date() }).where(eq(phoenixBootstrapTokens.id, record.id));
       return "created" as const;
     });
@@ -119,59 +205,118 @@ router.post("/auth/bootstrap", async (req, res) => {
 router.post("/auth/signup", async (req, res) => {
   const b = body(req), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
   if (!String(b.name ?? "").trim() || !/.+@.+\..+/.test(email) || password.length < 8) return res.status(400).json({ error: "validation_failed" });
-  if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "auth_unavailable" });
-  const [existing] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
-  if (existing) return res.status(409).json({ error: "email_taken" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "auth_unavailable" });
   const requestedSlug = slug(String(b.subdomain ?? "").trim()) ?? slug(String(b.brandName ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")) ?? null, pendingCustomDomain = b.customDomain === undefined ? null : customHost(b.customDomain), domainVerificationToken = pendingCustomDomain ? randomBytes(24).toString("base64url") : null;
   if (b.customDomain !== undefined && !pendingCustomDomain) return res.status(400).json({ error: "invalid_custom_domain" });
-  const inviteToken = String(b.inviteToken ?? ""), inviteHash = inviteToken ? createHmac("sha256", process.env.SESSION_SECRET).update(inviteToken).digest("hex") : "";
-  const [invite] = inviteToken ? await db.select().from(phoenixUserInvites).where(and(eq(phoenixUserInvites.tokenHash, inviteHash), gt(phoenixUserInvites.expiresAt, new Date()), isNull(phoenixUserInvites.usedAt))).limit(1) : [];
+  const inviteToken = String(b.inviteToken ?? ""), found = inviteToken ? await inviteByToken(inviteToken, secret) : null, invite = inviteOpen(found) ? found : null;
   if (inviteToken && !invite) return res.status(400).json({ error: "invalid_or_expired_invite" });
   if (!invite && !requestedSlug) return res.status(400).json({ error: "valid_subdomain_required" });
-  if (invite && invite.email !== email) return res.status(403).json({ error: "invite_email_mismatch" });
+  if (invite && !sameEmail(invite.email, email)) return res.status(403).json({ error: "invite_email_mismatch" });
+  const [existing] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
+  // Signup only ever mints a new identity. A returning user accepting an
+  // invitation signs in first and adds the workspace through
+  // POST /auth/invitation/accept, so their existing access survives intact.
+  if (existing && invite) return res.status(409).json({ error: "account_exists", email });
+  if (existing) return res.status(409).json({ error: "email_taken" });
   const workspaceId = invite?.workspaceId ?? `ws_${randomUUID()}`, template = await getPhoenixStore(WORKSPACE_ID, true), name = String(b.name).trim(), brandName = String(b.brandName ?? "").trim() || name;
   if (!template) throw new Error("public_workspace_unavailable");
   const passwordRecord = await hashPassword(password), user = { id: `usr_${randomUUID()}`, email, workspaceId, name, role: invite?.role ?? "owner" };
   if (invite) {
-    const accepted = await db.transaction(async tx => {
-      const locked = await tx.execute(sql`SELECT id, workspace_id, email, role FROM phoenix_user_invites WHERE id = ${invite.id} AND used_at IS NULL AND expires_at > now() FOR UPDATE`);
-      const current = locked.rows[0] as { id: string; workspace_id: string; email: string; role: string } | undefined;
-      if (!current) return null;
-      if (current.email !== email) return "email_mismatch" as const;
-      const [workspace] = await tx.select().from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, current.workspace_id)).limit(1);
-      if (!workspace) return "workspace_missing" as const;
-      const invitedUser = { ...user, workspaceId: current.workspace_id, role: current.role };
-      const workspaceStore = new PhoenixStore(workspace.state as Record<string, unknown>);
-      workspaceStore.acceptInvite(email, name, current.role, current.workspace_id);
-      await tx.insert(phoenixUsers).values({ ...invitedUser, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
-      await tx.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, current.id));
-      await tx.update(phoenixWorkspaces).set({ state: workspaceStore.snapshot(), updatedAt: new Date() }).where(eq(phoenixWorkspaces.id, current.workspace_id));
-      return { user: invitedUser, workspace: workspaceStore.getWorkspace() };
-    });
-    if (!accepted) return res.status(400).json({ error: "invalid_or_expired_invite" });
+    const accepted = await redeemInvite(invite.id, user, (tx, invitedWorkspaceId, role) =>
+      tx.insert(phoenixUsers).values({ ...user, workspaceId: invitedWorkspaceId, role, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }));
+    if (accepted === "invalid") return res.status(400).json({ error: "invalid_or_expired_invite" });
     if (accepted === "email_mismatch") return res.status(403).json({ error: "invite_email_mismatch" });
     if (accepted === "workspace_missing") return res.status(410).json({ error: "invited_workspace_unavailable" });
-    setSession(res, accepted.user);
-    return res.status(201).json({ user: { email, name, role: accepted.user.role }, workspace: { id: accepted.user.workspaceId, name: accepted.workspace.name }, domain: { state: "none" } });
+    const invitedUser = { ...user, workspaceId: accepted.workspaceId, role: accepted.role };
+    setSession(res, invitedUser);
+    return res.status(201).json({ user: { email, name, role: accepted.role }, workspace: { id: accepted.workspaceId, name: accepted.name, role: accepted.role }, workspaces: await workspacesFor(invitedUser), domain: { state: "none" } });
   }
   const store = template;
   const workspace = store.getWorkspace(); store.updateWorkspace({ id: workspaceId, name: brandName, domain: String(b.subdomain ?? "").trim() || workspace.domain, type: String(b.practiceType ?? workspace.type), brand: { ...workspace.brand, customDomain: "" }, guide: { ...workspace.guide, name } });
   try { await db.insert(phoenixWorkspaces).values({ id: workspaceId, slug: requestedSlug!, pendingCustomDomain, domainVerificationToken, state: store.snapshot(), isPublic: true }); }
   catch { return res.status(409).json({ error: "subdomain_taken" }); }
-  await db.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
-  setSession(res, user); res.status(201).json({ user: { email, name, role: user.role }, workspace: { id: workspaceId, name: brandName }, domain: pendingCustomDomain ? { state: "pending", domain: pendingCustomDomain, txtName: `_phoenix-verification.${pendingCustomDomain}`, txtValue: domainVerificationToken } : { state: "none" } });
+  await db.transaction(async tx => {
+    await tx.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
+    await grantMembership(tx, user.id, workspaceId, user.role);
+  });
+  setSession(res, user); res.status(201).json({ user: { email, name, role: user.role }, workspace: { id: workspaceId, name: brandName, role: user.role }, workspaces: [{ id: workspaceId, slug: requestedSlug!, name: brandName, role: user.role }], domain: pendingCustomDomain ? { state: "pending", domain: pendingCustomDomain, txtName: `_phoenix-verification.${pendingCustomDomain}`, txtValue: domainVerificationToken } : { state: "none" } });
 });
 router.post("/auth/login", async (req, res) => {
   const b = body(req), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
   const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
   if (!user || !(await passwordMatches(password, user.passwordSalt, user.passwordHash))) return res.status(401).json({ error: "invalid_credentials" });
-  if (!setSession(res, user)) return res.status(503).json({ error: "auth_unavailable" });
-  res.json({ user: { email: user.email, name: user.name, role: user.role }, workspace: { id: user.workspaceId } });
+  // Land in the home workspace when it is still reachable; the client offers the
+  // rest of `workspaces` as a picker rather than guessing on the user's behalf.
+  const workspaces = await workspacesFor(user), active = workspaces.find(value => value.id === user.workspaceId) ?? workspaces[0];
+  if (!active) return res.status(403).json({ error: "no_workspace_access" });
+  if (!setSession(res, { ...user, workspaceId: active.id, role: active.role })) return res.status(503).json({ error: "auth_unavailable" });
+  res.json({ user: { email: user.email, name: user.name, role: active.role }, workspace: { id: active.id, name: active.name, role: active.role }, workspaces });
 });
-router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user || user.workspaceId !== value.workspaceId) return res.status(401).json({ error: "unauthorized" }); res.json({ user: { email: user.email, name: user.name, role: user.role }, workspace: { id: user.workspaceId } }); });
+router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, value.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === value.workspaceId); res.json({ user: { email: user.email, name: user.name, role }, workspace: { id: value.workspaceId, name: active?.name ?? "", role }, workspaces }); });
 router.post("/auth/logout", (_req, res) => res.clearCookie("po_session", { path: "/" }).json({ ok: true }));
 router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
 router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const tokenHash = capabilityHash(token, secret); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
+
+
+/**
+ * What an invitation link is worth, before anyone spends it. Public because the
+ * token itself is the capability, and the holder already received the email —
+ * so this tells them which workspace and role are on offer, whether an account
+ * already exists for the invited address, and whether the session they are
+ * currently signed into is the one that can accept it.
+ */
+router.get("/auth/invitation", async (req, res) => {
+  if (limited(req, "invitation", 30)) return res.status(429).json({ error: "rate_limited" });
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
+  const invite = await inviteByToken(String(req.query.token ?? ""), secret);
+  if (!inviteOpen(invite)) return res.status(400).json({ error: "invalid_or_expired_invite" });
+  const [workspace] = await db.select().from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, invite.workspaceId)).limit(1);
+  if (!workspace) return res.status(410).json({ error: "invited_workspace_unavailable" });
+  const [invited] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(eq(phoenixUsers.email, invite.email)).limit(1);
+  const signed = session(req);
+  const [current] = signed ? await db.select({ email: phoenixUsers.email }).from(phoenixUsers).where(eq(phoenixUsers.id, signed.userId)).limit(1) : [];
+  res.json({
+    invitation: {
+      email: invite.email,
+      role: invite.role,
+      expiresAt: invite.expiresAt,
+      workspace: { id: workspace.id, name: workspaceName(workspace.state) },
+      accountExists: Boolean(invited),
+      signedInAs: current?.email ?? null,
+      acceptableNow: Boolean(current && sameEmail(current.email, invite.email)),
+    },
+  });
+});
+/**
+ * Adds the invited workspace to the signed-in account. The session's own email is
+ * the trust anchor — an invitation is only spendable by the account it was
+ * addressed to, so a link forwarded to somebody else buys them nothing.
+ */
+router.post("/auth/invitation/accept", csrfOrigin, signedIn, async (req, res) => {
+  const secret = serverSecret();
+  if (!secret) return res.status(503).json({ error: "invites_unavailable" });
+  const user = account(req);
+  const invite = await inviteByToken(String(body(req).token ?? ""), secret);
+  if (!inviteOpen(invite)) return res.status(400).json({ error: "invalid_or_expired_invite" });
+  if (!sameEmail(invite.email, user.email)) return res.status(403).json({ error: "invite_email_mismatch", invitedEmail: invite.email });
+  const accepted = await redeemInvite(invite.id, user);
+  if (accepted === "invalid") return res.status(400).json({ error: "invalid_or_expired_invite" });
+  if (accepted === "email_mismatch") return res.status(403).json({ error: "invite_email_mismatch", invitedEmail: invite.email });
+  if (accepted === "workspace_missing") return res.status(410).json({ error: "invited_workspace_unavailable" });
+  if (!setSession(res, { ...user, workspaceId: accepted.workspaceId, role: accepted.role })) return res.status(503).json({ error: "auth_unavailable" });
+  res.status(201).json({ workspace: { id: accepted.workspaceId, name: accepted.name, role: accepted.role }, workspaces: await workspacesFor(user) });
+});
+/** Moves the session to another workspace the account already belongs to. */
+router.post("/auth/workspace", csrfOrigin, signedIn, async (req, res) => {
+  const user = account(req), workspaceId = String(body(req).workspaceId ?? "");
+  const role = await roleInWorkspace(user, workspaceId);
+  if (!role) return res.status(403).json({ error: "workspace_access_denied" });
+  if (!setSession(res, { ...user, workspaceId, role })) return res.status(503).json({ error: "auth_unavailable" });
+  const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === workspaceId);
+  res.json({ user: { email: user.email, name: user.name, role }, workspace: { id: workspaceId, name: active?.name ?? "", role }, workspaces });
+});
 
 router.get("/public/workspace", async (req, res) => { const value = await publicStore(req); res.json({ workspace: value.store.getWorkspace() }); });
 router.get("/public/funnels/:slug", async (req, res) => { const funnel = (await publicStore(req)).store.funnelBySlug(req.params.slug); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
@@ -195,7 +340,13 @@ const schedulingPatch = (value: unknown) => {
 router.get("/workspace", async (req, res) => res.json({ workspace: (await tenantStore(req)).getWorkspace() }));
 router.get("/workspace/domain-status", async (req, res) => { const [row] = await db.select({ customDomain: phoenixWorkspaces.customDomain, pendingCustomDomain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken, verifiedAt: phoenixWorkspaces.customDomainVerifiedAt }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, identity(req).workspaceId)).limit(1); if (!row) return res.status(404).json({ error: "workspace_not_found" }); res.json({ state: row.pendingCustomDomain ? "pending" : row.customDomain ? "verified" : "none", domain: row.pendingCustomDomain ?? row.customDomain, verifiedAt: row.verifiedAt, ...(row.pendingCustomDomain && row.token ? { txtName: `_phoenix-verification.${row.pendingCustomDomain}`, txtValue: row.token } : {}) }); });
 router.post("/workspace/domain-verify", async (req, res) => { const workspaceId = identity(req).workspaceId, [row] = await db.select({ domain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, workspaceId)).limit(1); if (!row?.domain || !row.token) return res.status(400).json({ error: "no_pending_domain" }); let records: string[][]; try { records = await resolveTxt(`_phoenix-verification.${row.domain}`); } catch { return res.status(422).json({ error: "dns_verification_not_found", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); } if (!records.some(parts => parts.join("") === row.token)) return res.status(422).json({ error: "dns_verification_mismatch", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); try { const verifiedAt = new Date(), workspace = await db.transaction(async tx => { const locked = await tx.execute(sql`SELECT state, pending_custom_domain, domain_verification_token FROM phoenix_workspaces WHERE id = ${workspaceId} FOR UPDATE`), current = locked.rows[0] as { state: Record<string, unknown>; pending_custom_domain: string | null; domain_verification_token: string | null } | undefined; if (!current || current.pending_custom_domain !== row.domain || current.domain_verification_token !== row.token) throw new Error("domain_changed"); const store = new PhoenixStore(current.state), ws = store.getWorkspace(); store.updateWorkspace({ domain: row.domain, brand: { ...ws.brand, customDomain: row.domain } }); await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), customDomain: row.domain, pendingCustomDomain: null, domainVerificationToken: null, customDomainVerifiedAt: verifiedAt, updatedAt: verifiedAt }).where(eq(phoenixWorkspaces.id, workspaceId)); return store.getWorkspace(); }); res.json({ state: "verified", domain: row.domain, verifiedAt, workspace }); } catch (err) { if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "domain_taken" }); if ((err as Error).message === "domain_changed") return res.status(409).json({ error: "domain_changed" }); throw err; } });
-router.get("/members", async (req, res) => res.json({ members: (await tenantStore(req)).listMembers() }));
+router.get("/members", async (req, res) => {
+  const workspaceId = identity(req).workspaceId;
+  const invites = await db.select({ id: phoenixUserInvites.id, email: phoenixUserInvites.email, role: phoenixUserInvites.role, expiresAt: phoenixUserInvites.expiresAt })
+    .from(phoenixUserInvites)
+    .where(and(eq(phoenixUserInvites.workspaceId, workspaceId), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt), gt(phoenixUserInvites.expiresAt, new Date())));
+  res.json({ members: (await tenantStore(req)).listMembers(), invites });
+});
 router.get("/funnels", async (req, res) => res.json({ funnels: (await tenantStore(req)).listFunnels() }));
 router.get("/funnels/:id", async (req, res) => { const funnel = (await tenantStore(req)).funnelById(req.params.id); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.get("/pipelines", async (req, res) => res.json({ pipelines: (await tenantStore(req)).listPipelines() }));
@@ -271,6 +422,23 @@ router.post("/members/invite", async (req, res) => {
     req.log.warn({ reason: delivery.reason, workspaceId }, "Admin invitation email delivery failed");
   }
   res.json({ member, invitePath, expiresAt, delivery });
+});
+/**
+ * Withdraws every outstanding invitation for an address in this workspace. The
+ * link keeps its shape but stops being spendable, which is the point: an
+ * invitation sent to the wrong person has to be cancellable before it is opened.
+ */
+router.post("/members/invite/revoke", async (req, res) => {
+  const email = String(body(req).email ?? "").trim().toLowerCase();
+  if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" });
+  const workspaceId = identity(req).workspaceId;
+  const revoked = await db.update(phoenixUserInvites)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(phoenixUserInvites.workspaceId, workspaceId), eq(phoenixUserInvites.email, email), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt)))
+    .returning({ id: phoenixUserInvites.id });
+  if (!revoked.length) return res.status(404).json({ error: "no_pending_invitation" });
+  const member = await mutatePhoenixStore(workspaceId, store => store.revokeInvite(email));
+  res.json({ revoked: revoked.length, member });
 });
 router.post("/cms/toggle", async (req, res) => { const b = body(req); if (!b.pageId || !b.sectionId) return res.status(400).json({ error: "missing_fields" }); await mutatePhoenixStore(identity(req).workspaceId, store => store.toggle(String(b.pageId), String(b.sectionId), Boolean(b.enabled))); res.json({ ok: true }); });
 router.patch("/funnels/:id", async (req, res) => { const b = body(req), allowed = ["name", "slug", "segment", "offer", "status", "storybrand", "variants", "blocks", "weights"], funnel = await mutatePhoenixStore(identity(req).workspaceId, store => store.updateFunnel(req.params.id, Object.fromEntries(allowed.filter(k => b[k] !== undefined).map(k => [k, b[k]])))); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
