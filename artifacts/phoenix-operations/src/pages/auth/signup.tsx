@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import AuthShell from "@/components/auth/AuthShell";
 import { takeInviteToken } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 
 // 3-step self-service workspace signup:
 //   1) account (name, email, password)
@@ -83,8 +84,6 @@ const onDate = (value: string | undefined) => {
     ? ""
     : parsed.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 };
-
-const roleLabel = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();

@@ -2,13 +2,14 @@ import { createHmac, randomBytes, randomUUID, scrypt, timingSafeEqual } from "no
 import { promisify } from "node:util";
 import { resolveTxt } from "node:dns/promises";
 import { Router, type IRouter, type Request, type RequestHandler } from "express";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { db, phoenixBootstrapTokens, phoenixMemberships, phoenixResetTokens, phoenixUserInvites, phoenixUsers, phoenixWorkspaces, type PhoenixUser, type PhoenixUserInvite } from "@workspace/db";
 import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigured as calendlyConfigured, isWebhookConfigured, listEventTypes, safeTimeZone, slotDayLabel, slotTimeLabel, timeZoneLabel, weekLabel, zonedDateKey } from "@workspace/calendly";
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
-import { bootstrapTokenHash } from "../lib/phoenix-bootstrap";
+import { bootstrapTokenHash, superAdminExists } from "../lib/phoenix-bootstrap";
 import { sendAdminInvitationEmail } from "../lib/phoenix-email";
+import { assignableRoles, can, isRole, outranksOrEquals, rank, type Permission } from "../lib/phoenix-roles";
 
 const router: IRouter = Router();
 const scryptAsync = promisify(scrypt);
@@ -105,16 +106,13 @@ const redeemInvite = async (
     const invite = locked.rows[0] as { id: string; workspace_id: string; email: string; role: string } | undefined;
     if (!invite) return "invalid" as const;
     if (!sameEmail(invite.email, account.email)) return "email_mismatch" as const;
-    const workspaceRows = await tx.execute(sql`SELECT id, slug, state FROM phoenix_workspaces WHERE id = ${invite.workspace_id} FOR UPDATE`);
+    const workspaceRows = await tx.execute(sql`SELECT id, slug, state FROM phoenix_workspaces WHERE id = ${invite.workspace_id}`);
     const workspace = workspaceRows.rows[0] as { id: string; slug: string; state: Record<string, unknown> } | undefined;
     if (!workspace) return "workspace_missing" as const;
-    const store = new PhoenixStore(workspace.state);
-    store.acceptInvite(account.email, account.name, invite.role, invite.workspace_id);
     await createAccount?.(tx, invite.workspace_id, invite.role);
     await grantMembership(tx, account.id, invite.workspace_id, invite.role);
     await tx.update(phoenixUserInvites).set({ usedAt: new Date() }).where(eq(phoenixUserInvites.id, invite.id));
-    await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), updatedAt: new Date() }).where(eq(phoenixWorkspaces.id, invite.workspace_id));
-    return { workspaceId: invite.workspace_id, slug: workspace.slug, name: store.getWorkspace().name, role: invite.role };
+    return { workspaceId: invite.workspace_id, slug: workspace.slug, name: workspaceName(workspace.state), role: invite.role };
   });
 /** Valid cookie plus a live account. Workspace access is a separate question, checked per route. */
 const signedIn: RequestHandler = async (req, res, next) => {
@@ -155,7 +153,7 @@ const publicWorkspace = async (req: Request) => {
 };
 const publicStore = async (req: Request) => { const row = await publicWorkspace(req); if (!row) throw new Error("public_workspace_unavailable"); const store = await getPhoenixStore(row.id); if (!store) throw new Error("public_workspace_unavailable"); return { id: row.id, store }; };
 const tenantStore = async (req: Request) => { const store = await getPhoenixStore(identity(req).workspaceId); if (!store) throw new Error("workspace_not_found"); return store; };
-const requireRole = (...roles: string[]): RequestHandler => (req, res, next) => roles.includes(identity(req).role) ? next() : res.status(403).json({ error: "forbidden" });
+const requirePermission = (permission: Permission): RequestHandler => (req, res, next) => can(identity(req).role, permission) ? next() : res.status(403).json({ error: "forbidden" });
 const normalizedOrigin = (value: string) => { try { const url = new URL(value); return `${url.protocol}//${url.host.toLowerCase()}`; } catch { return null; } };
 const csrfOrigin: RequestHandler = (req, res, next) => {
   if (!["POST", "PATCH", "PUT", "DELETE"].includes(req.method)) return next();
@@ -169,33 +167,47 @@ const csrfOrigin: RequestHandler = (req, res, next) => {
   next();
 };
 
-router.get("/auth/bootstrap/status", async (_req, res) => {
-  const [owner] = await db.select({ id: phoenixUsers.id }).from(phoenixUsers).where(and(eq(phoenixUsers.workspaceId, WORKSPACE_ID), sql`${phoenixUsers.role} IN ('owner', 'admin')`)).limit(1);
-  res.json({ bootstrapRequired: !owner });
-});
+router.get("/auth/bootstrap/status", async (_req, res) => res.json({ bootstrapRequired: !(await superAdminExists()) }));
+/**
+ * One-time claim of the Phoenix workspace, opened from the URL that boot prints
+ * to the private deployment logs. An email that already signs in proves itself
+ * with its current password; the Phoenix workspace is added to that account as
+ * super admin and becomes its home, and every other workspace it belongs to is
+ * kept. A new email creates the account. The first successful claim revokes
+ * every outstanding claim link.
+ */
 router.post("/auth/bootstrap", async (req, res) => {
   if (limited(req, "bootstrap", 5)) return res.status(429).json({ error: "rate_limited" });
   if (!process.env.SESSION_SECRET) return res.status(503).json({ error: "auth_unavailable" });
   const b = body(req), token = String(b.token ?? ""), name = String(b.name ?? "").trim(), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
-  if (!token || !name || !/.+@.+\..+/.test(email) || password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return res.status(400).json({ error: "validation_failed" });
-  const tokenHash = bootstrapTokenHash(token), passwordRecord = await hashPassword(password), user = { id: `usr_${randomUUID()}`, email, workspaceId: WORKSPACE_ID, name, role: "owner" };
+  if (!token || !/.+@.+\..+/.test(email) || !password) return res.status(400).json({ error: "validation_failed" });
+  const tokenHash = bootstrapTokenHash(token);
+  const [claimable] = await db.select({ id: phoenixBootstrapTokens.id }).from(phoenixBootstrapTokens).where(and(eq(phoenixBootstrapTokens.tokenHash, tokenHash), eq(phoenixBootstrapTokens.workspaceId, WORKSPACE_ID), isNull(phoenixBootstrapTokens.consumedAt), gt(phoenixBootstrapTokens.expiresAt, new Date()))).limit(1);
+  if (!claimable) return res.status(400).json({ error: "invalid_or_expired_token" });
+  const [existing] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1);
+  if (existing && !(await passwordMatches(password, existing.passwordSalt, existing.passwordHash))) return res.status(401).json({ error: "invalid_credentials" });
+  if (!existing && (!name || password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password))) return res.status(400).json({ error: "validation_failed" });
+  const passwordRecord = existing ? null : await hashPassword(password);
   try {
-    const created = await db.transaction(async tx => {
+    const outcome = await db.transaction(async tx => {
       await tx.execute(sql`SELECT id FROM phoenix_workspaces WHERE id = ${WORKSPACE_ID} FOR UPDATE`);
-      const owner = await tx.execute(sql`SELECT id FROM phoenix_users WHERE workspace_id = ${WORKSPACE_ID} AND role IN ('owner', 'admin') LIMIT 1`);
-      if (owner.rows.length) return "already_owned" as const;
+      const claimed = await tx.execute(sql`SELECT id FROM phoenix_memberships WHERE workspace_id = ${WORKSPACE_ID} AND role = 'super_admin' LIMIT 1`);
+      if (claimed.rows.length) return "already_claimed" as const;
       const locked = await tx.execute(sql`SELECT id FROM phoenix_bootstrap_tokens WHERE token_hash = ${tokenHash} AND workspace_id = ${WORKSPACE_ID} AND consumed_at IS NULL AND expires_at > now() FOR UPDATE`);
-      const record = locked.rows[0] as { id: string } | undefined;
-      if (!record) return "invalid_token" as const;
-      await tx.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
-      await grantMembership(tx, user.id, WORKSPACE_ID, user.role);
-      await tx.update(phoenixBootstrapTokens).set({ consumedAt: new Date() }).where(eq(phoenixBootstrapTokens.id, record.id));
-      return "created" as const;
+      if (!locked.rows.length) return "invalid_token" as const;
+      // The Phoenix workspace becomes the login's home, so signing in lands there.
+      const [user] = existing
+        ? await tx.update(phoenixUsers).set({ workspaceId: WORKSPACE_ID, role: "super_admin", ...(name ? { name } : {}) }).where(eq(phoenixUsers.id, existing.id)).returning()
+        : await tx.insert(phoenixUsers).values({ id: `usr_${randomUUID()}`, email, workspaceId: WORKSPACE_ID, name, role: "super_admin", passwordHash: passwordRecord!.hash, passwordSalt: passwordRecord!.salt }).returning();
+      await grantMembership(tx, user.id, WORKSPACE_ID, "super_admin");
+      await tx.update(phoenixBootstrapTokens).set({ consumedAt: new Date() }).where(and(eq(phoenixBootstrapTokens.workspaceId, WORKSPACE_ID), isNull(phoenixBootstrapTokens.consumedAt)));
+      return { user, claimed: existing ? "existing" as const : "created" as const, previousWorkspaceId: existing && existing.workspaceId !== WORKSPACE_ID ? existing.workspaceId : null };
     });
-    if (created === "already_owned") return res.status(409).json({ error: "bootstrap_not_required" });
-    if (created === "invalid_token") return res.status(400).json({ error: "invalid_or_expired_token" });
-    setSession(res, user);
-    res.status(201).json({ user: { email, name, role: "owner" } });
+    if (outcome === "already_claimed") return res.status(409).json({ error: "bootstrap_not_required" });
+    if (outcome === "invalid_token") return res.status(400).json({ error: "invalid_or_expired_token" });
+    setSession(res, { ...outcome.user, workspaceId: WORKSPACE_ID, role: "super_admin" });
+    const workspaces = await workspacesFor(outcome.user), active = workspaces.find(entry => entry.id === WORKSPACE_ID);
+    res.status(201).json({ user: { id: outcome.user.id, email: outcome.user.email, name: outcome.user.name, role: "super_admin" }, workspace: { id: WORKSPACE_ID, name: active?.name ?? "", role: "super_admin" }, workspaces, claimed: outcome.claimed, previousWorkspaceId: outcome.previousWorkspaceId });
   } catch (err) {
     if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "email_taken" });
     throw err;
@@ -276,7 +288,7 @@ router.post("/auth/signup", async (req, res) => {
     if (accepted === "workspace_missing") return res.status(410).json({ error: "invited_workspace_unavailable" });
     const invitedUser = { ...user, workspaceId: accepted.workspaceId, role: accepted.role };
     setSession(res, invitedUser);
-    return res.status(201).json({ user: { email, name, role: accepted.role }, workspace: { id: accepted.workspaceId, name: accepted.name, role: accepted.role }, workspaces: await workspacesFor(invitedUser), domain: { state: "none" } });
+    return res.status(201).json({ user: { id: user.id, email, name, role: accepted.role }, workspace: { id: accepted.workspaceId, name: accepted.name, role: accepted.role }, workspaces: await workspacesFor(invitedUser), domain: { state: "none" } });
   }
   const store = template;
   const workspace = store.getWorkspace(); store.updateWorkspace({ id: workspaceId, name: brandName, domain: String(b.subdomain ?? "").trim() || workspace.domain, type: String(b.practiceType ?? workspace.type), brand: { ...workspace.brand, customDomain: "" }, guide: { ...workspace.guide, name } });
@@ -286,7 +298,7 @@ router.post("/auth/signup", async (req, res) => {
     await tx.insert(phoenixUsers).values({ ...user, passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt });
     await grantMembership(tx, user.id, workspaceId, user.role);
   });
-  setSession(res, user); res.status(201).json({ user: { email, name, role: user.role }, workspace: { id: workspaceId, name: brandName, role: user.role }, workspaces: [{ id: workspaceId, slug: requestedSlug!, name: brandName, role: user.role }], domain: pendingCustomDomain ? { state: "pending", domain: pendingCustomDomain, txtName: `_phoenix-verification.${pendingCustomDomain}`, txtValue: domainVerificationToken } : { state: "none" } });
+  setSession(res, user); res.status(201).json({ user: { id: user.id, email, name, role: user.role }, workspace: { id: workspaceId, name: brandName, role: user.role }, workspaces: [{ id: workspaceId, slug: requestedSlug!, name: brandName, role: user.role }], domain: pendingCustomDomain ? { state: "pending", domain: pendingCustomDomain, txtName: `_phoenix-verification.${pendingCustomDomain}`, txtValue: domainVerificationToken } : { state: "none" } });
 });
 router.post("/auth/login", async (req, res) => {
   const b = body(req), email = String(b.email ?? "").trim().toLowerCase(), password = String(b.password ?? "");
@@ -297,9 +309,9 @@ router.post("/auth/login", async (req, res) => {
   const workspaces = await workspacesFor(user), active = workspaces.find(value => value.id === user.workspaceId) ?? workspaces[0];
   if (!active) return res.status(403).json({ error: "no_workspace_access" });
   if (!setSession(res, { ...user, workspaceId: active.id, role: active.role })) return res.status(503).json({ error: "auth_unavailable" });
-  res.json({ user: { email: user.email, name: user.name, role: active.role }, workspace: { id: active.id, name: active.name, role: active.role }, workspaces });
+  res.json({ user: { id: user.id, email: user.email, name: user.name, role: active.role }, workspace: { id: active.id, name: active.name, role: active.role }, workspaces });
 });
-router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, value.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === value.workspaceId); res.json({ user: { email: user.email, name: user.name, role }, workspace: { id: value.workspaceId, name: active?.name ?? "", role }, workspaces }); });
+router.get("/auth/session", async (req, res) => { const value = session(req); if (!value) return res.status(401).json({ error: "unauthorized" }); const [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.id, value.userId)).limit(1); if (!user) return res.status(401).json({ error: "unauthorized" }); const role = await roleInWorkspace(user, value.workspaceId); if (!role) return res.status(401).json({ error: "unauthorized" }); const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === value.workspaceId); res.json({ user: { id: user.id, email: user.email, name: user.name, role }, workspace: { id: value.workspaceId, name: active?.name ?? "", role }, workspaces }); });
 router.post("/auth/logout", (_req, res) => res.clearCookie("po_session", { path: "/" }).json({ ok: true }));
 router.post("/auth/reset/request", async (req, res) => { if (process.env.NODE_ENV === "production") return res.status(503).json({ error: "recovery_unavailable" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const email = String(body(req).email ?? "").trim().toLowerCase(), [user] = await db.select().from(phoenixUsers).where(eq(phoenixUsers.email, email)).limit(1); const result: { ok: boolean; resetUrl?: string } = { ok: true }; if (user) { const token = randomBytes(32).toString("base64url"), tokenHash = capabilityHash(token, secret); await db.insert(phoenixResetTokens).values({ id: `rst_${randomUUID()}`, tokenHash, userId: user.id, expiresAt: new Date(Date.now() + 30 * 60_000) }); result.resetUrl = `${siteUrl(req)}/reset?token=${encodeURIComponent(token)}`; } res.json(result); });
 router.post("/auth/reset/confirm", async (req, res) => { const token = String(body(req).token ?? ""), password = String(body(req).password ?? ""); if (!token || password.length < 8) return res.status(400).json({ error: "validation_failed" }); const secret = serverSecret(); if (!secret) return res.status(503).json({ error: "recovery_unavailable" }); const tokenHash = capabilityHash(token, secret); const [record] = await db.select().from(phoenixResetTokens).where(and(eq(phoenixResetTokens.tokenHash, tokenHash), gt(phoenixResetTokens.expiresAt, new Date()), isNull(phoenixResetTokens.usedAt))).limit(1); if (!record) return res.status(400).json({ error: "invalid_or_expired_token" }); const passwordRecord = await hashPassword(password); await db.update(phoenixUsers).set({ passwordHash: passwordRecord.hash, passwordSalt: passwordRecord.salt }).where(eq(phoenixUsers.id, record.userId)); await db.update(phoenixResetTokens).set({ usedAt: new Date() }).where(eq(phoenixResetTokens.id, record.id)); res.json({ ok: true }); });
@@ -331,7 +343,7 @@ router.post("/auth/workspace", csrfOrigin, signedIn, async (req, res) => {
   if (!role) return res.status(403).json({ error: "workspace_access_denied" });
   if (!setSession(res, { ...user, workspaceId, role })) return res.status(503).json({ error: "auth_unavailable" });
   const workspaces = await workspacesFor(user), active = workspaces.find(entry => entry.id === workspaceId);
-  res.json({ user: { email: user.email, name: user.name, role }, workspace: { id: workspaceId, name: active?.name ?? "", role }, workspaces });
+  res.json({ user: { id: user.id, email: user.email, name: user.name, role }, workspace: { id: workspaceId, name: active?.name ?? "", role }, workspaces });
 });
 
 router.get("/public/workspace", async (req, res) => { const value = await publicStore(req); res.json({ workspace: value.store.getWorkspace() }); });
@@ -339,9 +351,9 @@ router.get("/public/funnels/:slug", async (req, res) => { const funnel = (await 
 router.get("/public/cms", async (req, res) => res.json({ pages: (await publicStore(req)).store.listCms() }));
 router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], adminOnly);
 router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], csrfOrigin);
-router.use(["/workspace", "/members"], requireRole("owner", "admin"));
-router.use(["/webhooks", "/subscriptions", "/scheduling"], requireRole("owner", "admin"));
-router.use("/partners", requireRole("platform_admin"));
+router.use("/members", requirePermission("members.read"));
+router.use(["/webhooks", "/subscriptions", "/scheduling"], requirePermission("workspace.manage"));
+router.use("/partners", requirePermission("partners.read"));
 const schedulingPatch = (value: unknown) => {
   if (value === undefined || value === null || typeof value !== "object") return {};
   const v = value as Record<string, unknown>;
@@ -354,14 +366,22 @@ const schedulingPatch = (value: unknown) => {
   };
 };
 router.get("/workspace", async (req, res) => res.json({ workspace: (await tenantStore(req)).getWorkspace() }));
-router.get("/workspace/domain-status", async (req, res) => { const [row] = await db.select({ customDomain: phoenixWorkspaces.customDomain, pendingCustomDomain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken, verifiedAt: phoenixWorkspaces.customDomainVerifiedAt }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, identity(req).workspaceId)).limit(1); if (!row) return res.status(404).json({ error: "workspace_not_found" }); res.json({ state: row.pendingCustomDomain ? "pending" : row.customDomain ? "verified" : "none", domain: row.pendingCustomDomain ?? row.customDomain, verifiedAt: row.verifiedAt, ...(row.pendingCustomDomain && row.token ? { txtName: `_phoenix-verification.${row.pendingCustomDomain}`, txtValue: row.token } : {}) }); });
-router.post("/workspace/domain-verify", async (req, res) => { const workspaceId = identity(req).workspaceId, [row] = await db.select({ domain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, workspaceId)).limit(1); if (!row?.domain || !row.token) return res.status(400).json({ error: "no_pending_domain" }); let records: string[][]; try { records = await resolveTxt(`_phoenix-verification.${row.domain}`); } catch { return res.status(422).json({ error: "dns_verification_not_found", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); } if (!records.some(parts => parts.join("") === row.token)) return res.status(422).json({ error: "dns_verification_mismatch", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); try { const verifiedAt = new Date(), workspace = await db.transaction(async tx => { const locked = await tx.execute(sql`SELECT state, pending_custom_domain, domain_verification_token FROM phoenix_workspaces WHERE id = ${workspaceId} FOR UPDATE`), current = locked.rows[0] as { state: Record<string, unknown>; pending_custom_domain: string | null; domain_verification_token: string | null } | undefined; if (!current || current.pending_custom_domain !== row.domain || current.domain_verification_token !== row.token) throw new Error("domain_changed"); const store = new PhoenixStore(current.state), ws = store.getWorkspace(); store.updateWorkspace({ domain: row.domain, brand: { ...ws.brand, customDomain: row.domain } }); await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), customDomain: row.domain, pendingCustomDomain: null, domainVerificationToken: null, customDomainVerifiedAt: verifiedAt, updatedAt: verifiedAt }).where(eq(phoenixWorkspaces.id, workspaceId)); return store.getWorkspace(); }); res.json({ state: "verified", domain: row.domain, verifiedAt, workspace }); } catch (err) { if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "domain_taken" }); if ((err as Error).message === "domain_changed") return res.status(409).json({ error: "domain_changed" }); throw err; } });
+router.get("/workspace/domain-status", requirePermission("workspace.manage"), async (req, res) => { const [row] = await db.select({ customDomain: phoenixWorkspaces.customDomain, pendingCustomDomain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken, verifiedAt: phoenixWorkspaces.customDomainVerifiedAt }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, identity(req).workspaceId)).limit(1); if (!row) return res.status(404).json({ error: "workspace_not_found" }); res.json({ state: row.pendingCustomDomain ? "pending" : row.customDomain ? "verified" : "none", domain: row.pendingCustomDomain ?? row.customDomain, verifiedAt: row.verifiedAt, ...(row.pendingCustomDomain && row.token ? { txtName: `_phoenix-verification.${row.pendingCustomDomain}`, txtValue: row.token } : {}) }); });
+router.post("/workspace/domain-verify", requirePermission("workspace.manage"), async (req, res) => { const workspaceId = identity(req).workspaceId, [row] = await db.select({ domain: phoenixWorkspaces.pendingCustomDomain, token: phoenixWorkspaces.domainVerificationToken }).from(phoenixWorkspaces).where(eq(phoenixWorkspaces.id, workspaceId)).limit(1); if (!row?.domain || !row.token) return res.status(400).json({ error: "no_pending_domain" }); let records: string[][]; try { records = await resolveTxt(`_phoenix-verification.${row.domain}`); } catch { return res.status(422).json({ error: "dns_verification_not_found", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); } if (!records.some(parts => parts.join("") === row.token)) return res.status(422).json({ error: "dns_verification_mismatch", txtName: `_phoenix-verification.${row.domain}`, txtValue: row.token }); try { const verifiedAt = new Date(), workspace = await db.transaction(async tx => { const locked = await tx.execute(sql`SELECT state, pending_custom_domain, domain_verification_token FROM phoenix_workspaces WHERE id = ${workspaceId} FOR UPDATE`), current = locked.rows[0] as { state: Record<string, unknown>; pending_custom_domain: string | null; domain_verification_token: string | null } | undefined; if (!current || current.pending_custom_domain !== row.domain || current.domain_verification_token !== row.token) throw new Error("domain_changed"); const store = new PhoenixStore(current.state), ws = store.getWorkspace(); store.updateWorkspace({ domain: row.domain, brand: { ...ws.brand, customDomain: row.domain } }); await tx.update(phoenixWorkspaces).set({ state: store.snapshot(), customDomain: row.domain, pendingCustomDomain: null, domainVerificationToken: null, customDomainVerifiedAt: verifiedAt, updatedAt: verifiedAt }).where(eq(phoenixWorkspaces.id, workspaceId)); return store.getWorkspace(); }); res.json({ state: "verified", domain: row.domain, verifiedAt, workspace }); } catch (err) { if ((err as { code?: string }).code === "23505") return res.status(409).json({ error: "domain_taken" }); if ((err as Error).message === "domain_changed") return res.status(409).json({ error: "domain_changed" }); throw err; } });
+/** Members are the accounts seated here through phoenix_memberships, plus invitations still open. Logins carry a `usr_` id, pending invitations an `inv_` id. */
+type MemberRow = { id: string; workspaceId: string; name: string; email: string; role: string; state: "active" | "invited"; createdAt: string; inviteExpiresAt?: string };
+const activeMember = (seat: { id: string; workspaceId: string; name: string; email: string; role: string; joinedAt: Date }): MemberRow => ({ id: seat.id, workspaceId: seat.workspaceId, name: seat.name, email: seat.email, role: seat.role, state: "active", createdAt: seat.joinedAt.toISOString() });
+const invitedMember = (invite: { id: string; workspaceId: string; email: string; role: string; createdAt: Date; expiresAt: Date }): MemberRow => ({ id: invite.id, workspaceId: invite.workspaceId, name: invite.email.split("@")[0], email: invite.email, role: invite.role, state: "invited", createdAt: invite.createdAt.toISOString(), inviteExpiresAt: invite.expiresAt.toISOString() });
+const pendingInvite = (workspaceId: string, id?: string) => and(eq(phoenixUserInvites.workspaceId, workspaceId), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt), gt(phoenixUserInvites.expiresAt, new Date()), ...(id ? [eq(phoenixUserInvites.id, id)] : []));
+const byRankThenName = (a: MemberRow, b: MemberRow) => rank(b.role) - rank(a.role) || a.name.localeCompare(b.name);
+const seatColumns = { id: phoenixUsers.id, workspaceId: phoenixMemberships.workspaceId, name: phoenixUsers.name, email: phoenixUsers.email, role: phoenixMemberships.role, joinedAt: phoenixMemberships.createdAt, homeWorkspaceId: phoenixUsers.workspaceId };
+const seatsIn = (workspaceId: string) => db.select(seatColumns).from(phoenixMemberships).innerJoin(phoenixUsers, eq(phoenixUsers.id, phoenixMemberships.userId)).where(eq(phoenixMemberships.workspaceId, workspaceId));
+/** One member's seat here, joined to the account that holds it. */
+const seatOf = async (workspaceId: string, userId: string) => { const [row] = await seatsIn(workspaceId).$dynamic().where(and(eq(phoenixMemberships.workspaceId, workspaceId), eq(phoenixMemberships.userId, userId))).limit(1); return row ?? null; };
 router.get("/members", async (req, res) => {
   const workspaceId = identity(req).workspaceId;
-  const invites = await db.select({ id: phoenixUserInvites.id, email: phoenixUserInvites.email, role: phoenixUserInvites.role, expiresAt: phoenixUserInvites.expiresAt })
-    .from(phoenixUserInvites)
-    .where(and(eq(phoenixUserInvites.workspaceId, workspaceId), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt), gt(phoenixUserInvites.expiresAt, new Date())));
-  res.json({ members: (await tenantStore(req)).listMembers(), invites });
+  const [seats, invites] = await Promise.all([seatsIn(workspaceId), db.select().from(phoenixUserInvites).where(pendingInvite(workspaceId))]);
+  res.json({ members: [...seats.map(activeMember).sort(byRankThenName), ...invites.map(invitedMember).sort(byRankThenName)] });
 });
 router.get("/funnels", async (req, res) => res.json({ funnels: (await tenantStore(req)).listFunnels() }));
 router.get("/funnels/:id", async (req, res) => { const funnel = (await tenantStore(req)).funnelById(req.params.id); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
@@ -375,7 +395,14 @@ router.get("/sequences", async (req, res) => res.json({ sequences: (await tenant
 router.get("/webhooks", async (req, res) => res.json({ webhooks: (await tenantStore(req)).listWebhooks() }));
 router.get("/sync-log", async (req, res) => res.json({ entries: (await tenantStore(req)).listSyncLog() }));
 router.get("/subscriptions", async (req, res) => res.json({ subscriptions: (await tenantStore(req)).listSubscriptions() }));
-router.get("/partners", async (req, res) => res.json({ workspaces: (await tenantStore(req)).listPartners() }));
+router.get("/partners", async (_req, res) => {
+  const [rows, counts] = await Promise.all([
+    db.select({ id: phoenixWorkspaces.id, slug: phoenixWorkspaces.slug, customDomain: phoenixWorkspaces.customDomain, isPublic: phoenixWorkspaces.isPublic, state: phoenixWorkspaces.state, createdAt: phoenixWorkspaces.createdAt }).from(phoenixWorkspaces).where(ne(phoenixWorkspaces.id, WORKSPACE_ID)).orderBy(desc(phoenixWorkspaces.createdAt)),
+    db.select({ workspaceId: phoenixMemberships.workspaceId, members: sql<number>`count(*)::int` }).from(phoenixMemberships).groupBy(phoenixMemberships.workspaceId),
+  ]);
+  const memberCounts = new Map(counts.map(row => [row.workspaceId, row.members]));
+  res.json({ workspaces: rows.map(row => ({ ...new PhoenixStore(row.state as Record<string, unknown>).getWorkspace(), id: row.id, slug: row.slug, customDomain: row.customDomain, isPublic: row.isPublic, memberCount: memberCounts.get(row.id) ?? 0, createdAt: row.createdAt.toISOString() })) });
+});
 router.get("/scheduling/status", async (req, res) => {
   const scheduling = schedulingOf(await tenantStore(req));
   if (!calendlyConfigured()) return res.json({ tokenPresent: false, webhookConfigured: isWebhookConfigured(), account: null, scheduling, connected: false });
@@ -398,71 +425,128 @@ router.get("/scheduling/event-types", async (_req, res) => {
   res.json({ eventTypes: types.data });
 });
 
-router.patch("/workspace", async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) }, scheduling: { ...current.scheduling, ...schedulingPatch(b.scheduling) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });
-router.post("/members/invite", async (req, res) => {
+router.patch("/workspace", requirePermission("workspace.manage"), async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) }, scheduling: { ...current.scheduling, ...schedulingPatch(b.scheduling) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });
+router.post("/members/invite", requirePermission("members.invite"), async (req, res) => {
+  const actor = identity(req);
   const email = String(body(req).email ?? "").trim().toLowerCase();
-  const requestedRole = String(body(req).role);
-  const role = ["admin", "owner", "staff", "partner"].includes(requestedRole) ? requestedRole : null;
+  const role = String(body(req).role ?? "");
   if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" });
-  if (!role) return res.status(400).json({ error: "invalid_role" });
+  if (!isRole(role)) return res.status(400).json({ error: "invalid_role" });
+  if (!assignableRoles(actor.role).includes(role)) return res.status(403).json({ error: "role_not_assignable" });
+  const workspaceId = actor.workspaceId;
+  // Somebody already seated here needs a role change, not an invitation. An
+  // account that lives elsewhere is fine: they sign in and this workspace is added.
+  const [seated] = await db.select({ id: phoenixMemberships.id }).from(phoenixMemberships).innerJoin(phoenixUsers, eq(phoenixUsers.id, phoenixMemberships.userId)).where(and(eq(phoenixMemberships.workspaceId, workspaceId), eq(phoenixUsers.email, email))).limit(1);
+  if (seated) return res.status(409).json({ error: "already_member" });
   const secret = serverSecret();
   if (!secret) return res.status(503).json({ error: "invites_unavailable" });
 
   const token = randomBytes(32).toString("base64url");
-  const tokenHash = capabilityHash(token, secret);
-  const expiresAt = new Date(Date.now() + 7 * 86400_000);
-  const workspaceId = identity(req).workspaceId;
-  // Re-inviting an address supersedes the links already in that person's inbox,
-  // so a stale one cannot be redeemed for the role it used to carry — and so the
-  // signup page can tell them the older link was replaced rather than "invalid".
-  await db.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(and(eq(phoenixUserInvites.workspaceId, workspaceId), eq(phoenixUserInvites.email, email), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt)));
-  await db.insert(phoenixUserInvites).values({
-    id: `inv_${randomUUID()}`,
-    tokenHash,
-    workspaceId,
-    email,
-    role,
-    expiresAt,
+  const invite = { id: `inv_${randomUUID()}`, tokenHash: capabilityHash(token, secret), workspaceId, email, role, expiresAt: new Date(Date.now() + 7 * 86400_000) };
+  await db.transaction(async tx => {
+    // Re-inviting an address supersedes the links already in that person's inbox,
+    // so a stale one cannot be redeemed for the role it used to carry — and so the
+    // signup page can tell them the older link was replaced rather than "invalid".
+    await tx.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(and(pendingInvite(workspaceId), eq(phoenixUserInvites.email, email)));
+    await tx.insert(phoenixUserInvites).values(invite);
   });
-  const store = await tenantStore(req);
-  const workspace = store.getWorkspace();
-  const member = await mutatePhoenixStore(workspaceId, current => current.invite(email, role, workspaceId));
+  const workspace = (await tenantStore(req)).getWorkspace();
+  const member = invitedMember({ ...invite, createdAt: new Date() });
   const invitePath = `/signup?invite=${encodeURIComponent(token)}`;
   const delivery = await sendAdminInvitationEmail({
     to: email,
     role,
     inviteUrl: new URL(invitePath, siteUrl(req)).toString(),
-    expiresAt,
+    expiresAt: invite.expiresAt,
     workspaceName: workspace.name,
-    inviterName: identity(req).email,
+    inviterName: actor.email,
     brand: workspace.brand,
     siteUrl: siteUrl(req),
   });
   if (delivery.status === "failed") {
     req.log.warn({ reason: delivery.reason, workspaceId }, "Admin invitation email delivery failed");
   }
-  res.json({ member, invitePath, expiresAt, delivery });
+  res.json({ member, invitePath, expiresAt: invite.expiresAt, delivery });
 });
 /**
  * Withdraws every outstanding invitation for an address in this workspace. The
  * link keeps its shape but stops being spendable, which is the point: an
  * invitation sent to the wrong person has to be cancellable before it is opened.
+ * Anyone who can invite can withdraw, for roles at or below their own.
  */
-router.post("/members/invite/revoke", async (req, res) => {
-  const email = String(body(req).email ?? "").trim().toLowerCase();
+router.post("/members/invite/revoke", requirePermission("members.invite"), async (req, res) => {
+  const actor = identity(req), email = String(body(req).email ?? "").trim().toLowerCase();
   if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: "invalid_email" });
-  const workspaceId = identity(req).workspaceId;
-  const revoked = await db.update(phoenixUserInvites)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(phoenixUserInvites.workspaceId, workspaceId), eq(phoenixUserInvites.email, email), isNull(phoenixUserInvites.usedAt), isNull(phoenixUserInvites.revokedAt)))
-    .returning({ id: phoenixUserInvites.id });
-  if (!revoked.length) return res.status(404).json({ error: "no_pending_invitation" });
-  const member = await mutatePhoenixStore(workspaceId, store => store.revokeInvite(email));
-  res.json({ revoked: revoked.length, member });
+  const open = await db.select({ role: phoenixUserInvites.role }).from(phoenixUserInvites).where(and(pendingInvite(actor.workspaceId), eq(phoenixUserInvites.email, email)));
+  if (!open.length) return res.status(404).json({ error: "no_pending_invitation" });
+  if (open.some(invite => !outranksOrEquals(actor.role, invite.role))) return res.status(403).json({ error: "outranked" });
+  const revoked = await db.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(and(pendingInvite(actor.workspaceId), eq(phoenixUserInvites.email, email))).returning({ id: phoenixUserInvites.id });
+  res.json({ revoked: revoked.length });
 });
-router.post("/cms/toggle", async (req, res) => { const b = body(req); if (!b.pageId || !b.sectionId) return res.status(400).json({ error: "missing_fields" }); await mutatePhoenixStore(identity(req).workspaceId, store => store.toggle(String(b.pageId), String(b.sectionId), Boolean(b.enabled))); res.json({ ok: true }); });
-router.patch("/funnels/:id", async (req, res) => { const b = body(req), allowed = ["name", "slug", "segment", "offer", "status", "storybrand", "variants", "blocks", "weights"], funnel = await mutatePhoenixStore(identity(req).workspaceId, store => store.updateFunnel(req.params.id, Object.fromEntries(allowed.filter(k => b[k] !== undefined).map(k => [k, b[k]])))); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
-router.post("/funnels/:id", async (req, res) => { if (req.params.id !== "new") return res.status(405).json({ error: "use_patch" }); const b = body(req), funnelSlug = String(b.slug ?? "").replace(/[^a-z0-9-]/g, ""); if (!funnelSlug) return res.status(400).json({ error: "slug_required" }); const funnel = await mutatePhoenixStore(identity(req).workspaceId, store => { if (store.funnelBySlug(funnelSlug)) return null; return store.createFunnel({ ...b, id: undefined, workspaceId: identity(req).workspaceId, name: String(b.name || "New funnel"), slug: funnelSlug, status: "draft", variants: Array.isArray(b.variants) && b.variants.length ? b.variants : [{ id: "A", label: "A", headline: "", trafficPct: 100 }], stats: { visits: 0, leads: 0, cvr: "—" } }); }); if (!funnel) return res.status(409).json({ error: "slug_taken" }); res.json({ funnel }); });
+/**
+ * Change the role a member holds here, or the role a pending invitation will
+ * grant. Rank rules: only roles at or below your own, only on people at or below
+ * your rank, and never on yourself. Pending invitations answer to anyone who can
+ * invite; seated members only to those who can manage members.
+ */
+router.patch("/members/:id", async (req, res) => {
+  const actor = identity(req), role = String(body(req).role ?? ""), id = String(req.params.id), pending = id.startsWith("inv_");
+  if (!can(actor.role, pending ? "members.invite" : "members.manage")) return res.status(403).json({ error: "forbidden" });
+  if (!isRole(role)) return res.status(400).json({ error: "invalid_role" });
+  if (!assignableRoles(actor.role).includes(role)) return res.status(403).json({ error: "role_not_assignable" });
+  if (id === actor.userId) return res.status(400).json({ error: "cannot_change_own_role" });
+  if (pending) {
+    const [invite] = await db.select().from(phoenixUserInvites).where(pendingInvite(actor.workspaceId, id)).limit(1);
+    if (!invite) return res.status(404).json({ error: "not_found" });
+    if (!outranksOrEquals(actor.role, invite.role)) return res.status(403).json({ error: "outranked" });
+    const [updated] = await db.update(phoenixUserInvites).set({ role }).where(eq(phoenixUserInvites.id, invite.id)).returning();
+    return res.json({ member: invitedMember(updated) });
+  }
+  const seat = await seatOf(actor.workspaceId, id);
+  if (!seat) return res.status(404).json({ error: "not_found" });
+  if (!outranksOrEquals(actor.role, seat.role)) return res.status(403).json({ error: "outranked" });
+  await db.transaction(async tx => {
+    await tx.update(phoenixMemberships).set({ role }).where(and(eq(phoenixMemberships.userId, seat.id), eq(phoenixMemberships.workspaceId, seat.workspaceId)));
+    // The user row mirrors the home-workspace role, so keep the two in step.
+    if (seat.homeWorkspaceId === seat.workspaceId) await tx.update(phoenixUsers).set({ role }).where(eq(phoenixUsers.id, seat.id));
+  });
+  res.json({ member: activeMember({ ...seat, role }) });
+});
+/**
+ * Remove a member's seat here, or revoke a pending invitation. Removing a seat
+ * never touches the person's other workspaces. When this was their home
+ * workspace, home moves to the oldest workspace they still belong to; an account
+ * left with no workspace at all is deleted, because the home column cannot be empty.
+ */
+router.delete("/members/:id", async (req, res) => {
+  const actor = identity(req), id = String(req.params.id), pending = id.startsWith("inv_");
+  if (!can(actor.role, pending ? "members.invite" : "members.manage")) return res.status(403).json({ error: "forbidden" });
+  if (id === actor.userId) return res.status(400).json({ error: "cannot_remove_self" });
+  if (pending) {
+    const [invite] = await db.select().from(phoenixUserInvites).where(pendingInvite(actor.workspaceId, id)).limit(1);
+    if (!invite) return res.status(404).json({ error: "not_found" });
+    if (!outranksOrEquals(actor.role, invite.role)) return res.status(403).json({ error: "outranked" });
+    await db.update(phoenixUserInvites).set({ revokedAt: new Date() }).where(eq(phoenixUserInvites.id, invite.id));
+    return res.json({ ok: true, revoked: invite.id });
+  }
+  const seat = await seatOf(actor.workspaceId, id);
+  if (!seat) return res.status(404).json({ error: "not_found" });
+  if (!outranksOrEquals(actor.role, seat.role)) return res.status(403).json({ error: "outranked" });
+  const accountDeleted = await db.transaction(async tx => {
+    await tx.delete(phoenixMemberships).where(and(eq(phoenixMemberships.userId, seat.id), eq(phoenixMemberships.workspaceId, seat.workspaceId)));
+    if (seat.homeWorkspaceId !== seat.workspaceId) return false;
+    const [next] = await tx.select({ workspaceId: phoenixMemberships.workspaceId, role: phoenixMemberships.role }).from(phoenixMemberships).where(eq(phoenixMemberships.userId, seat.id)).orderBy(asc(phoenixMemberships.createdAt)).limit(1);
+    if (next) { await tx.update(phoenixUsers).set({ workspaceId: next.workspaceId, role: next.role }).where(eq(phoenixUsers.id, seat.id)); return false; }
+    await tx.delete(phoenixResetTokens).where(eq(phoenixResetTokens.userId, seat.id));
+    await tx.delete(phoenixUsers).where(eq(phoenixUsers.id, seat.id));
+    return true;
+  });
+  res.json({ ok: true, removed: seat.id, accountDeleted });
+});
+
+router.post("/cms/toggle", requirePermission("content.manage"), async (req, res) => { const b = body(req); if (!b.pageId || !b.sectionId) return res.status(400).json({ error: "missing_fields" }); await mutatePhoenixStore(identity(req).workspaceId, store => store.toggle(String(b.pageId), String(b.sectionId), Boolean(b.enabled))); res.json({ ok: true }); });
+router.patch("/funnels/:id", requirePermission("content.manage"), async (req, res) => { const b = body(req), allowed = ["name", "slug", "segment", "offer", "status", "storybrand", "variants", "blocks", "weights"], funnel = await mutatePhoenixStore(identity(req).workspaceId, store => store.updateFunnel(String(req.params.id), Object.fromEntries(allowed.filter(k => b[k] !== undefined).map(k => [k, b[k]])))); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
+router.post("/funnels/:id", requirePermission("content.manage"), async (req, res) => { if (req.params.id !== "new") return res.status(405).json({ error: "use_patch" }); const b = body(req), funnelSlug = String(b.slug ?? "").replace(/[^a-z0-9-]/g, ""); if (!funnelSlug) return res.status(400).json({ error: "slug_required" }); const funnel = await mutatePhoenixStore(identity(req).workspaceId, store => { if (store.funnelBySlug(funnelSlug)) return null; return store.createFunnel({ ...b, id: undefined, workspaceId: identity(req).workspaceId, name: String(b.name || "New funnel"), slug: funnelSlug, status: "draft", variants: Array.isArray(b.variants) && b.variants.length ? b.variants : [{ id: "A", label: "A", headline: "", trafficPct: 100 }], stats: { visits: 0, leads: 0, cvr: "—" } }); }); if (!funnel) return res.status(409).json({ error: "slug_taken" }); res.json({ funnel }); });
 
 router.post("/intake/session", async (req, res) => { if (limited(req, "session", 60)) return res.status(429).json({ error: "rate_limited" }); const b = body(req), funnelSlug = String(b.funnelSlug ?? ""), token = b.resumeToken, tenant = await publicWorkspace(req); if (!tenant || !funnelSlug || typeof token !== "string" || token.length > 128) return res.status(400).json({ error: "missing_fields" }); const saved = await mutatePhoenixStore(tenant.id, store => { if (!store.funnelBySlug(funnelSlug)) return null; const previous = store.session(token) as Record<string, unknown> | null; return store.saveSession({ id: token, workspaceId: tenant.id, funnelSlug, variant: String(b.variant ?? "A"), resumeToken: token, step: Math.min(5, Math.max(1, Number(b.step ?? 1))), answers: b.answers ?? {}, utm: b.utm ?? {}, submitted: Boolean(previous?.submitted) }); }); if (!saved) return res.status(404).json({ error: "unknown_funnel" }); res.json({ ok: true, updatedAt: saved.updatedAt }); });
 router.get("/intake/session", async (req, res) => { const token = String(req.query.token ?? ""), tenant = await publicWorkspace(req); if (!token || !tenant) return res.status(400).json({ error: "missing_token" }); const store = await getPhoenixStore(tenant.id), saved = store?.session(token); if (!saved) return res.status(404).json({ error: "not_found" }); res.json({ session: saved }); });

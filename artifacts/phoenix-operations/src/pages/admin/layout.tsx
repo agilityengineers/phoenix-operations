@@ -3,18 +3,15 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import AdminNav from "@/components/admin/AdminNav";
 import { getStore } from "@/lib/store";
-import { fetchSession, roleLabel } from "@/lib/auth";
+import { useSession } from "@/lib/session";
+import { roleLabel } from "@/lib/roles";
 import { Loader2 } from "lucide-react";
 
 const basePath = () => import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
-  const { data: session, isLoading: sessionLoading } = useQuery({
-    queryKey: ["auth-session"],
-    queryFn: fetchSession,
-    retry: false,
-  });
+  const { data: session, isLoading: sessionLoading } = useSession();
   useEffect(() => {
     if (!sessionLoading && !session) {
       window.location.replace(`${basePath()}/admin/login`);
@@ -66,7 +63,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="bottom">OPERATIONS</div>
           </div>
         </div>
-        <AdminNav />
+        <AdminNav role={session.workspace.role ?? session.user.role} />
         <div className="adm-user">
           <img src={workspace.guide.photoUrl} alt="" width={34} height={34} style={{ borderRadius: '50%' }} />
           <div>

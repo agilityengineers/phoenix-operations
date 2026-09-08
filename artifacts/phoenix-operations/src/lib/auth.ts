@@ -5,7 +5,7 @@ import type { Role, WorkspaceMembership } from "./types";
 // so the active one lives in the session cookie and is swapped server-side.
 
 export interface AuthSession {
-  user: { email: string; name: string; role: Role };
+  user: { id: string; email: string; name: string; role: Role };
   workspace: { id: string; name: string; role: Role };
   workspaces: WorkspaceMembership[];
 }
@@ -146,4 +146,4 @@ export const authErrorMessage = (error: unknown) => {
   }
 };
 
-export const roleLabel = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
+export { roleLabel } from "./roles";

@@ -46,7 +46,7 @@ const termsSections = [
   },
   {
     h: "3. Accounts & roles",
-    body: "Workspace admins are responsible for the users they invite and the roles they assign (admin, owner, staff, partner). You are responsible for safeguarding credentials and for activity under your account.",
+    body: "Workspace admins are responsible for the users they invite and the roles they assign (super admin, admin, owner, staff, partner). You are responsible for safeguarding credentials and for activity under your account.",
   },
   {
     h: "4. Partner workspaces",

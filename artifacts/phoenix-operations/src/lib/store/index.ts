@@ -22,7 +22,8 @@ export interface DataStore {
 
   listMembers(): Promise<Member[]>;
   inviteMember(email: string, role: Member["role"]): Promise<Member>;
-  revokeInvite(email: string): Promise<Member | null>;
+  updateMemberRole(id: string, role: Member["role"]): Promise<Member>;
+  removeMember(id: string): Promise<void>;
 
   listFunnels(): Promise<Funnel[]>;
   getFunnelBySlug(slug: string): Promise<Funnel | null>;

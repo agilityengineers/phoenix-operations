@@ -86,11 +86,15 @@ export class MemoryStore implements DataStore {
     return clone(member);
   }
 
-  async revokeInvite(email: string): Promise<Member | null> {
-    const member = this.members.find((m) => m.email.toLowerCase() === email.toLowerCase() && m.state === "invited");
-    if (!member) return null;
-    member.state = "revoked";
+  async updateMemberRole(id: string, role: Member["role"]): Promise<Member> {
+    const member = this.members.find((m) => m.id === id);
+    if (!member) throw new Error("not_found");
+    member.role = role;
     return clone(member);
+  }
+
+  async removeMember(id: string): Promise<void> {
+    this.members = this.members.filter((m) => m.id !== id);
   }
 
   async listFunnels(): Promise<Funnel[]> {
