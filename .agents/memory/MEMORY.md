@@ -1,3 +1,3 @@
 - [Deployment host routing](deployment-host-routing.md) — Replit-attached custom domains are platform hosts; resolve them from REPLIT_DOMAINS before tenant-subdomain logic.
 - [Nested admin auth redirects](nested-admin-auth-redirects.md) — use a base-aware location replacement at the admin session boundary; nested Wouter navigation can stall.
-- [Roles and the super-admin claim](roles-and-super-admin-claim.md) — one login per workspace; partner signup makes a new workspace; the boot-time claim URL moves an existing login into ws_phoenix as super_admin; gate everything through the permissions table.
+- [Roles and the super-admin claim](roles-and-super-admin-claim.md) — roles live on memberships; partner signup makes a new workspace; the boot-time claim URL adds ws_phoenix to an existing login as super_admin; gate everything through the permissions table.

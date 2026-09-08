@@ -155,15 +155,17 @@ function MembersPanel({ members, actorRole, actorId, onChanged }: Props) {
             <span className={`pill ${m.state === "active" ? "ok" : "warn"}`}>
               {m.state.charAt(0).toUpperCase() + m.state.slice(1)}
             </span>
-            {editable(m) && (
+            {editable(m) ? (
               <button
                 type="button"
-                className="adm-btn-outline"
+                className="member-revoke"
                 disabled={busyId === m.id}
                 onClick={() => void remove(m)}
               >
                 {m.state === "invited" ? "Revoke" : "Remove"}
               </button>
+            ) : (
+              <span />
             )}
           </div>
         ))}

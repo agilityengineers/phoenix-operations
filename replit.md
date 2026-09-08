@@ -10,7 +10,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/scripts run test:calendly` — check the Calendly webhook signature verifier and slot formatters (no network, no credentials)
-- `pnpm --filter @workspace/scripts run test:admin-access` — release checks for super-admin login, invitations, the member directory and the rank rules. Needs a running API (`ADMIN_CHECK_BASE_URL`), `DATABASE_URL`, and chromium (set `ADMIN_CHECK_SKIP_BROWSER=1` to skip the rendered-page checks).
+- `pnpm --filter @workspace/scripts run test:admin-access` — release check for super-admin login, invitations and their dead-link statuses, the member directory, the rank rules, and multi-workspace membership. Needs `DATABASE_URL`, `SESSION_SECRET`, a running app (`ADMIN_CHECK_BASE_URL`, default `http://localhost:80`) and `chromium` on `PATH` (set `ADMIN_CHECK_SKIP_BROWSER=1` to skip the rendered-page checks); it creates and cleans up its own throwaway workspaces
 - `pnpm --filter @workspace/scripts run calendly:subscribe` — list Calendly webhook subscriptions; `create --url https://<host>/api/webhooks/calendly` sets one up and prints the signing key, `delete <uuid>` removes one. Needs `CALENDLY_PERSONAL_ACCESS_TOKEN`.
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `SESSION_SECRET` — signs session cookies and the single-use booking/reset/invite capability tokens. Auth, intake submission and booking all return 503 without it; there is deliberately no fallback, because a guessable secret would make those tokens forgeable.
@@ -97,9 +97,10 @@ Two of these hard-fail if done out of order.
 4. **Claim the super admin.** On boot with no super admin in the Phoenix workspace, the
    server writes a one-time `/bootstrap?token=…` claim URL to the *private deployment logs*,
    valid 60 minutes. Open it at `https://<host>/bootstrap?token=…`. An email that already
-   signs in (a partner signup, say) proves its password and is moved into the Phoenix
-   workspace as super admin, wherever it lived before; a new email creates the account. The
-   first successful claim revokes every outstanding link.
+   signs in (a partner signup, say) proves its password; the Phoenix workspace is added to
+   that account as super admin and becomes its home, and every other workspace it belongs to
+   is kept. A new email creates the account. The first successful claim revokes every
+   outstanding link.
 5. **`calendly:subscribe create --url https://<host>/api/webhooks/calendly`**, then paste the
    printed key in as `CALENDLY_WEBHOOK_SIGNING_KEY`. Both Calendly secrets are read per
    request, so no rebuild is needed.
@@ -108,21 +109,59 @@ Two of these hard-fail if done out of order.
 
 ## Roles & permissions
 
-- Hierarchy, top down: `super_admin` → `admin` → `owner` → `staff` → `partner`. The single
-  permissions table lives in `artifacts/api-server/src/lib/phoenix-roles.ts`, mirrored for the
-  UI in `artifacts/phoenix-operations/src/lib/roles.ts` (change both together). To open a
-  feature to admins later, add the role to that feature's row; every route and screen reads it.
+- Hierarchy, top down: `super_admin` → `admin` → `owner` → `staff` → `partner`. A role is held
+  per workspace membership, so one account can be super admin in the Phoenix workspace and
+  owner of its own partner workspace. The single permissions table lives in
+  `artifacts/api-server/src/lib/phoenix-roles.ts`, mirrored for the UI in
+  `artifacts/phoenix-operations/src/lib/roles.ts` (change both together). To open a feature to
+  admins later, add the role to that feature's row; every route and screen reads it.
 - Key-ring rule: you can grant, change or remove only roles at or below your own rank, and
-  never your own. Role changes and removals (`members.manage`) are super admin and admin only;
-  owners invite owners, staff and partners.
-- One login belongs to exactly one workspace, and emails are unique platform-wide. "Partner
-  signup" on `/signup` creates a *new* workspace and makes the signer its `owner`; it never
-  joins the Phoenix workspace. Joining an existing workspace happens only through an
-  invitation link (`/signup?invite=…`) accepted with the invited email, or through the claim
-  URL in the go-live order above.
-- The member directory (`GET /members`) is built from `phoenix_users` plus open invitations in
-  `phoenix_user_invites`. The JSONB workspace state no longer carries members or partner
-  workspaces; `GET /partners` (super admin only) lists every real workspace except `ws_phoenix`.
+  never your own. Role changes and seat removals (`members.manage`) are super admin and admin
+  only; owners invite owners, staff and partners, and can withdraw the invitations they could
+  have sent.
+- The super-admin seat lives in the Phoenix workspace. It is created only by the claim URL in
+  the go-live order above, or by a super admin inviting another. `GET /partners` (super admin
+  only) lists every real workspace except `ws_phoenix`, with seat counts.
+- "Partner signup" on `/signup` creates a *new* workspace and makes the signer its `owner`; it
+  never joins the Phoenix workspace. Joining an existing workspace happens through an
+  invitation, or through the claim URL for the super-admin seat.
+- The member directory (`GET /members`) is built from `phoenix_memberships` plus open
+  invitations in `phoenix_user_invites`; the JSONB workspace state no longer carries members
+  or partner workspaces. `PATCH /members/:id` changes a seat's role (or a pending invitation's),
+  `DELETE /members/:id` removes a seat or revokes an invitation. Removing a seat never touches
+  the person's other workspaces; when it was their home workspace, home moves to the oldest one
+  they still belong to, and an account left with no workspace is deleted.
+
+## Workspace membership
+
+One person, one account, many workspaces. `phoenix_users` holds the identity (email
+unique) and its **home** workspace; `phoenix_memberships` holds *access* — one row per
+(user, workspace) with the role held there. The session cookie names the active
+workspace, and every admin request re-reads the role from the membership for that pair,
+so a role differs per workspace and a change takes effect on the next request.
+
+- **Accepting an invitation never replaces access.** `POST /auth/signup` mints a new
+  identity and refuses a known email with `account_exists`; a returning user signs in and
+  calls `POST /auth/invite/accept`, which adds a membership and leaves every other one
+  alone. Both paths run inside one transaction that locks the invitation row, so a token
+  cannot be spent twice.
+- **Choosing where to work.** `POST /auth/login` lands in the home workspace and returns
+  the full `workspaces` list; `/workspaces` is the picker, and `POST /auth/workspace`
+  re-issues the cookie for another workspace the account already belongs to.
+- **Rejections.** Wrong-email, used, expired and revoked invitations all fail closed.
+  `GET /auth/invite` classifies a link before the form and, for a live one, also says
+  whether the invited address already has an account and whether this browser's session
+  is that account — which is how signup knows to send a returning invitee to sign-in.
+  Revocation is `POST /members/invite/revoke` or `DELETE /members/<inv_ id>` (anyone who can
+  invite, for roles at or below their own), alongside the supersession
+  that re-inviting an address already performs; both stamp `revoked_at`, so the old link
+  keeps its shape but buys nothing.
+- **Backfill.** `ensurePhoenixSchema()` writes a membership for every user's home
+  workspace on each boot (idempotent). Until it runs, the home workspace on the user row
+  still counts as an implicit membership, so accounts predating the table keep working.
+- **Every member can load the admin shell.** `GET /workspace` is open to all roles; changing
+  the workspace needs `workspace.manage`, so a staff or partner invitee lands on a working
+  dashboard with the management screens hidden.
 
 ## Gotchas
 
@@ -135,7 +174,7 @@ Two of these hard-fail if done out of order.
 - `PhoenixStore.snapshot()` enumerates its fields explicitly, so a new top-level key on the
   store will not persist unless it's added there. Scheduling config sidesteps this by living
   inside the `workspace` record.
-- On API startup, the default `ws_phoenix` workspace is created idempotently. If it has no super admin, the server mints a one-time 60-minute claim token and writes its `/bootstrap?token=...` URL once to private deployment logs. Earlier unexpired tokens stay valid, because autoscale can boot several instances and whoever reads the logs may pick any of them; the first successful claim revokes them all. The public bootstrap status endpoint exposes only whether a claim is still open; it never exposes the token.
+- On API startup, the default `ws_phoenix` workspace is created idempotently. If no membership there holds `super_admin`, the server mints a one-time 60-minute claim token and writes its `/bootstrap?token=...` URL once to private deployment logs. Earlier unexpired tokens stay valid, because autoscale can boot several instances and whoever reads the logs may pick any of them; the first successful claim revokes them all. The public bootstrap status endpoint exposes only whether a claim is still open; it never exposes the token.
 
 ## Pointers
 

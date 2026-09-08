@@ -1,11 +1,17 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 import AuthShell from "@/components/auth/AuthShell";
+import { takeInviteToken } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 
 // 3-step self-service workspace signup:
 //   1) account (name, email, password)
 //   2) practice type + brand name + subdomain
 //   3) plan pick → Stripe Checkout (14-day trial)
+//
+// Arriving with ?invite=… collapses that to a single step, and the link is
+// checked against the API before the account form is shown at all — nobody
+// should type out a password only to be told the link died last week.
 
 const PRACTICE_TYPES = ["EOS Implementer", "Operations Consultant", "Business Coach", "Other professional"];
 
@@ -15,9 +21,74 @@ const PLANS = [
   { name: "Network", price: "$399", blurb: "Unlimited users · multi-workspace · partner rollup analytics" },
 ];
 
+type DeadStatus = "invalid" | "expired" | "used" | "revoked" | "workspace_unavailable" | "unavailable";
+
+type InviteCheck =
+  | { status: "checking" }
+  | { status: "valid"; email: string; role: string; workspaceName: string; expiresAt: string; accountExists: boolean }
+  | { status: DeadStatus; expiresAt?: string };
+
+// Why a link cannot be used, in the invitee's language. Every one of these is
+// safe to show a stranger: none of them names a workspace or confirms that an
+// account exists, and none of them echoes the token back.
+const DEAD_LINK: Record<DeadStatus, { title: string; body: string; retry?: boolean }> = {
+  expired: {
+    title: "This invitation has expired",
+    body: "Invitations stay valid for seven days. Ask the person who invited you to send a fresh one — it takes them a moment.",
+  },
+  used: {
+    title: "This invitation has already been used",
+    body: "An account was created with it. If that was you, sign in below; otherwise ask your administrator for a new invitation.",
+  },
+  revoked: {
+    title: "This invitation is no longer active",
+    body: "It was replaced or withdrawn by a workspace administrator. Check your inbox for a newer invitation, or ask them to resend one.",
+  },
+  invalid: {
+    title: "This invitation link isn't valid",
+    body: "The link may have been truncated by your email client. Try copying the full URL from the invitation, or ask your administrator to resend it.",
+  },
+  workspace_unavailable: {
+    title: "This workspace is no longer available",
+    body: "The workspace this invitation points to has been removed. Reach out to the person who invited you.",
+  },
+  unavailable: {
+    title: "We couldn't check this invitation",
+    body: "Something went wrong reaching the server. Your link is probably fine — try again in a moment.",
+    retry: true,
+  },
+};
+
+// Server error codes are precise but not human. Anything unmapped falls back to
+// a generic line rather than leaking a raw code into the UI.
+const SUBMIT_ERRORS: Record<string, string> = {
+  validation_failed: "Enter your name, a valid email, and a password of at least 8 characters.",
+  auth_unavailable: "Accounts can't be created right now. Try again in a few minutes.",
+  email_taken: "An account already exists for this email address. Sign in instead.",
+  account_exists: "An account already exists for this email address. Sign in to add this workspace to it.",
+  invite_email_mismatch: "This invitation was issued to a different email address.",
+  invited_workspace_unavailable: "The workspace behind this invitation is no longer available.",
+  invalid_custom_domain: "That custom domain isn't valid.",
+  valid_subdomain_required: "Choose a subdomain of letters, numbers, and hyphens.",
+  subdomain_taken: "That subdomain is already taken — try another.",
+  rate_limited: "Too many attempts. Wait a minute and try again.",
+};
+
+const isDead = (value: unknown): value is DeadStatus =>
+  typeof value === "string" && value in DEAD_LINK;
+
+const onDate = (value: string | undefined) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? ""
+    : parsed.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+};
+
 export default function SignupPage() {
   const [, setLocation] = useLocation();
-  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get("invite") ?? "");
+  const [inviteToken] = useState(takeInviteToken);
+  const [invite, setInvite] = useState<InviteCheck | null>(inviteToken ? { status: "checking" } : null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "",
@@ -37,6 +108,46 @@ export default function SignupPage() {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
+  const checkInvite = useCallback(async () => {
+    if (!inviteToken) return;
+    setInvite({ status: "checking" });
+    try {
+      const response = await fetch(`/api/auth/invite?token=${encodeURIComponent(inviteToken)}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("unavailable");
+      const value = (await response.json()) as {
+        status?: string;
+        email?: string;
+        role?: string;
+        workspaceName?: string;
+        expiresAt?: string;
+        accountExists?: boolean;
+      };
+      if (value.status === "valid") {
+        setInvite({
+          status: "valid",
+          email: value.email ?? "",
+          role: value.role ?? "staff",
+          workspaceName: value.workspaceName ?? "your workspace",
+          expiresAt: value.expiresAt ?? "",
+          accountExists: Boolean(value.accountExists),
+        });
+        // The server rejects any other address for this token, so the invitee
+        // never gets to guess at which mailbox the invitation was sent to.
+        setForm((f) => ({ ...f, email: value.email ?? "" }));
+        return;
+      }
+      setInvite({ status: isDead(value.status) ? value.status : "invalid", expiresAt: value.expiresAt });
+    } catch {
+      setInvite({ status: "unavailable" });
+    }
+  }, [inviteToken]);
+
+  useEffect(() => {
+    void checkInvite();
+  }, [checkInvite]);
+
   const createAccount = async () => {
     setBusy(true);
     setError("");
@@ -47,11 +158,25 @@ export default function SignupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, ...(inviteToken ? { inviteToken } : {}) }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Unable to create workspace." }))).error);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "" }))).error);
       setDone(true);
       setLocation("/admin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create workspace.");
+      const code = err instanceof Error ? err.message : "";
+      // The link can die between opening this page and submitting it. The
+      // server is the authority either way, so re-read the status and let the
+      // page fall through to the explanation rather than showing a form error.
+      if (code === "invalid_or_expired_invite" && inviteToken) {
+        await checkInvite();
+        return;
+      }
+      // The address gained an account between opening this page and submitting.
+      // Re-reading the status swaps the form for the sign-in-and-join panel.
+      if (code === "account_exists" && inviteToken) {
+        await checkInvite();
+        return;
+      }
+      setError(SUBMIT_ERRORS[code] ?? "Unable to create your account. Try again in a moment.");
     } finally {
       setBusy(false);
     }
@@ -82,23 +207,101 @@ export default function SignupPage() {
     await createAccount();
   };
 
+  if (invite?.status === "checking") {
+    return (
+      <AuthShell>
+        <div className="auth-card" role="status" aria-live="polite">
+          <h1>Checking your invitation</h1>
+          <p className="auth-sub">One moment while we confirm this link is still good.</p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (invite && invite.status !== "valid") {
+    const copy = DEAD_LINK[invite.status];
+    const expiredOn = invite.status === "expired" ? onDate(invite.expiresAt) : "";
+    return (
+      <AuthShell>
+        <div className="auth-card">
+          <img src="/assets/mark.png" alt="" width={40} height={40} className="mark" />
+          <h1>{copy.title}</h1>
+          <p className="auth-sub">
+            {copy.body}
+            {expiredOn ? ` This one lapsed on ${expiredOn}.` : ""}
+          </p>
+          {copy.retry ? (
+            <button type="button" className="signup-next" style={{ marginTop: 22 }} onClick={() => void checkInvite()}>
+              Try again
+            </button>
+          ) : null}
+          <p className="auth-foot">
+            <Link href="/login" className="auth-link">
+              ← Back to sign in
+            </Link>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  const accepted = invite?.status === "valid" ? invite : null;
+  const expiresOn = onDate(accepted?.expiresAt);
+
+  // A live invitation to an address that already has an account. Signup would
+  // only refuse it — the workspace is added to the identity they already have,
+  // which means signing in first. Everything they already use stays as it is.
+  if (accepted?.accountExists) {
+    return (
+      <AuthShell>
+        <div className="auth-card">
+          <img src="/assets/mark.png" alt="" width={40} height={40} className="mark" />
+          <h1>You already have an account</h1>
+          <p className="auth-sub">
+            {accepted.email} is already registered. Sign in and {accepted.workspaceName} is added to
+            your account as {roleLabel(accepted.role)} — the workspaces you already use stay exactly
+            as they are.
+          </p>
+          <Link href="/login" className="signup-next" style={{ marginTop: 22, display: "inline-block", textDecoration: "none" }}>
+            Sign in and join →
+          </Link>
+          <p className="auth-foot">
+            Not you?{" "}
+            <Link href="/login" className="auth-link">
+              Sign in with a different account
+            </Link>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
   return (
     <AuthShell>
       <div className="auth-card wide">
         <div className="signup-head">
           <div>
-            <h1 style={{ margin: 0 }}>{inviteToken ? "Accept your workspace invitation" : "Create your partner workspace"}</h1>
+            <h1 style={{ margin: 0 }}>
+              {accepted ? `Join ${accepted.workspaceName}` : "Create your partner workspace"}
+            </h1>
             <p className="auth-sub">
-              {inviteToken
-                ? "Create your account to join the workspace with the role selected by its administrator."
+              {accepted
+                ? `You've been invited as ${roleLabel(accepted.role)}. Create your account to join the workspace.`
                 : "Start a workspace for your white-labeled funnels, CRM, and guide page. No invite code is required."}
             </p>
           </div>
-          <span className="signup-step">Step {step} of {inviteToken ? 1 : 3}</span>
+          <span className="signup-step">Step {step} of {accepted ? 1 : 3}</span>
         </div>
         <div className="signup-progress">
-          <div style={{ width: inviteToken ? "100%" : `${step * 33.4}%` }} />
+          <div style={{ width: accepted ? "100%" : `${step * 33.4}%` }} />
         </div>
+
+        {accepted && (
+          <div className="auth-success" style={{ marginBottom: 20 }}>
+            ✓ Invitation confirmed for {accepted.email}
+            {expiresOn ? ` — valid through ${expiresOn}` : ""}
+          </div>
+        )}
 
         {step === 1 && (
           <div className="signup-grid">
@@ -118,8 +321,15 @@ export default function SignupPage() {
                 placeholder="you@yourfirm.com"
                 autoComplete="email"
                 value={form.email}
+                readOnly={Boolean(accepted)}
+                aria-describedby={accepted ? "invite-email-hint" : undefined}
                 onChange={(e) => set("email", e.target.value)}
               />
+              {accepted && (
+                <span id="invite-email-hint" className="signup-hint" style={{ fontWeight: 400 }}>
+                  This invitation is tied to this address.
+                </span>
+              )}
             </label>
             <label className="field">
               Password
@@ -219,7 +429,15 @@ export default function SignupPage() {
             ← Back
           </button>
           <button type="button" className="signup-next" onClick={next} disabled={busy}>
-            {step === 3 ? (busy ? "Starting…" : "Start free trial") : "Continue →"}
+            {accepted
+              ? busy
+                ? "Joining…"
+                : "Accept invitation →"
+              : step === 3
+                ? busy
+                  ? "Starting…"
+                  : "Start free trial"
+                : "Continue →"}
           </button>
         </div>
 

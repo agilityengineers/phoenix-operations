@@ -3,9 +3,9 @@ import { useLocation } from "wouter";
 import AuthShell from "@/components/auth/AuthShell";
 
 // One-time claim of the Phoenix Operations workspace. The link comes from the
-// private deployment logs. An email that already signs in is moved into the
-// Phoenix workspace as super admin after proving its password; a new email
-// creates the super admin account.
+// private deployment logs. An email that already signs in proves its password
+// and the Phoenix workspace is added to that account as super admin, alongside
+// any workspace it already belongs to; a new email creates the account.
 
 const ERROR_COPY: Record<string, string> = {
   invalid_or_expired_token: "This claim link is invalid or has expired. Restart the deployment to print a fresh one in the logs.",
@@ -39,7 +39,7 @@ export default function BootstrapPage() {
   };
   return <AuthShell><div className="auth-card">
     <h1>Claim the Phoenix Operations workspace</h1>
-    <p className="auth-sub">Use the one-time claim link from the private deployment logs. Links expire after 60 minutes. Sign in with an existing login to move it here as super admin, or enter a new email to create the super admin account.</p>
+    <p className="auth-sub">Use the one-time claim link from the private deployment logs. Links expire after 60 minutes. Sign in with an existing login to add this workspace to it as super admin, or enter a new email to create the super admin account. Any workspace you already belong to stays as it is.</p>
     <label className="field">Claim token<input value={token} onChange={e => setToken(e.target.value)} autoComplete="off" /></label>
     <label className="field">Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></label>
     <label className="field">Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="Your current password, or a new strong one" /></label>
