@@ -14,6 +14,9 @@
     },
     {
       "path": "./lib/integrations/calendly"
+    },
+    {
+      "path": "./lib/integrations/sendgrid"
     }
   ]
 }

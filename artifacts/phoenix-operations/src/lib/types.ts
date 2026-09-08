@@ -70,7 +70,7 @@ export interface Member {
   inviteExpiresAt?: string;
   inviteDelivery?: {
     status: "sent" | "failed";
-    reason?: "email_not_configured" | "provider_rejected" | "provider_unavailable";
+    reason?: "email_not_configured" | "sender_not_authenticated" | "provider_rejected" | "provider_unavailable";
   };
 }
 

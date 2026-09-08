@@ -8,7 +8,8 @@ import { availableTimes, bookedSlotLabel, createInvitee, currentUser, isConfigur
 import { csv, parseCsv, score } from "../lib/phoenix";
 import { getPhoenixStore, mutatePhoenixStore, PhoenixStore, WORKSPACE_ID, type Answers } from "../lib/phoenix-store";
 import { bootstrapTokenHash, superAdminExists } from "../lib/phoenix-bootstrap";
-import { sendAdminInvitationEmail } from "../lib/phoenix-email";
+import { emailStatus, isSenderKey, sendEmail, senderFor } from "@workspace/sendgrid";
+import { deliveryTestEmail, sendAdminInvitationEmail } from "../lib/phoenix-email";
 import { assignableRoles, can, isRole, outranksOrEquals, rank, type Permission } from "../lib/phoenix-roles";
 
 const router: IRouter = Router();
@@ -349,10 +350,10 @@ router.post("/auth/workspace", csrfOrigin, signedIn, async (req, res) => {
 router.get("/public/workspace", async (req, res) => { const value = await publicStore(req); res.json({ workspace: value.store.getWorkspace() }); });
 router.get("/public/funnels/:slug", async (req, res) => { const funnel = (await publicStore(req)).store.funnelBySlug(req.params.slug); if (!funnel) return res.status(404).json({ error: "not_found" }); res.json({ funnel }); });
 router.get("/public/cms", async (req, res) => res.json({ pages: (await publicStore(req)).store.listCms() }));
-router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], adminOnly);
-router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], csrfOrigin);
+router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/email", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], adminOnly);
+router.use(["/workspace", "/members", "/cms", "/funnels", "/contacts", "/pipelines", "/activities", "/scheduling", "/email", "/sequences", "/webhooks", "/sync-log", "/subscriptions", "/partners"], csrfOrigin);
 router.use("/members", requirePermission("members.read"));
-router.use(["/webhooks", "/subscriptions", "/scheduling"], requirePermission("workspace.manage"));
+router.use(["/webhooks", "/subscriptions", "/scheduling", "/email"], requirePermission("workspace.manage"));
 router.use("/partners", requirePermission("partners.read"));
 const schedulingPatch = (value: unknown) => {
   if (value === undefined || value === null || typeof value !== "object") return {};
@@ -423,6 +424,47 @@ router.get("/scheduling/event-types", async (_req, res) => {
   const types = await listEventTypes(me.data.uri);
   if (!types.ok) return res.status(502).json({ error: "calendly_unavailable", reason: types.error });
   res.json({ eventTypes: types.data });
+});
+
+/**
+ * Where email delivery stands, for Admin → Integrations. Read-only: whether a
+ * SendGrid key is present, whether the sending domain is authenticated, and how
+ * each of the three senders is authorised. The API key never leaves the server;
+ * the DNS records this does return are public by definition, which is exactly
+ * why it is safe — and useful — to show them to the admin who has to publish them.
+ */
+router.get("/email/status", requirePermission("workspace.manage"), async (req, res) => {
+  res.json(await emailStatus({ refresh: String(req.query.refresh ?? "") === "1" }));
+});
+/**
+ * Sends one test message to the signed-in admin's own address. There is
+ * deliberately no recipient parameter: this answers "did the secrets I just
+ * pasted into Replit take effect?", and answering it for anyone else's inbox
+ * would turn an admin screen into a way to mail strangers from our domain.
+ */
+router.post("/email/test", requirePermission("workspace.manage"), async (req, res) => {
+  if (limited(req, "email-test", 5)) return res.status(429).json({ error: "rate_limited" });
+  const actor = identity(req);
+  const key = String((req.body as Record<string, unknown> | undefined)?.from ?? "noreply");
+  if (!isSenderKey(key)) return res.status(400).json({ error: "unknown_sender" });
+  const sender = senderFor(key);
+  if (!sender) return res.status(400).json({ error: "unknown_sender" });
+  const workspace = (await tenantStore(req)).getWorkspace();
+  const message = deliveryTestEmail({
+    to: actor.email,
+    senderKey: key,
+    senderName: sender.name,
+    senderEmail: sender.email,
+    replyTo: sender.replyTo,
+    workspaceName: workspace.name,
+    siteUrl: siteUrl(req),
+  });
+  const sent = await sendEmail({ to: actor.email, from: key, subject: message.subject, html: message.html, text: message.text, categories: ["delivery-test"] });
+  if (!sent.ok) {
+    req.log.warn({ error: sent.error, sender: key }, "Email delivery test failed");
+    return res.status(502).json({ error: sent.error, detail: sent.detail });
+  }
+  res.json({ ok: true, to: actor.email, from: sender.email, sandbox: sent.data.sandbox, messageId: sent.data.messageId });
 });
 
 router.patch("/workspace", requirePermission("workspace.manage"), async (req, res) => { if (!req.body || typeof req.body !== "object") return invalid(res); const b = body(req), pending = b.customDomain === null ? null : b.customDomain !== undefined ? customHost(b.customDomain) : undefined; if (b.customDomain !== undefined && pending === null && b.customDomain !== null) return res.status(400).json({ error: "invalid_custom_domain" }); const token = pending ? randomBytes(24).toString("base64url") : null; const workspace = await mutatePhoenixStore(identity(req).workspaceId, store => { const current = store.getWorkspace(); return store.updateWorkspace({ ...(b.domain ? { domain: b.domain } : {}), brand: { ...current.brand, ...((b.brand as object) ?? {}), ...(pending !== undefined ? { customDomain: "" } : {}) }, guide: { ...current.guide, ...((b.guide as object) ?? {}) }, scheduling: { ...current.scheduling, ...schedulingPatch(b.scheduling) } }); }, pending !== undefined ? { customDomain: null, pendingCustomDomain: pending, domainVerificationToken: token, customDomainVerifiedAt: null } : {}); res.json({ workspace, ...(pending ? { domain: { state: "pending", domain: pending, txtName: `_phoenix-verification.${pending}`, txtValue: token } } : pending === null ? { domain: { state: "none" } } : {}) }); });

@@ -80,7 +80,9 @@ function MembersPanel({ members, actorRole, actorId, onChanged }: Props) {
         const reason =
           member.inviteDelivery?.reason === "email_not_configured"
             ? "Email delivery is not configured."
-            : "The email could not be delivered.";
+            : member.inviteDelivery?.reason === "sender_not_authenticated"
+              ? "SendGrid won't send from our address yet — the sending domain still needs authenticating."
+              : "The email could not be delivered.";
         try {
           await navigator.clipboard.writeText(inviteUrl);
           alert(`${reason} The ${label} invitation link was copied to your clipboard. It only works for ${email}.`);

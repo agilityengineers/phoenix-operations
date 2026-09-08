@@ -12,17 +12,20 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run test:calendly` — check the Calendly webhook signature verifier and slot formatters (no network, no credentials)
 - `pnpm --filter @workspace/phoenix-operations run test` — admin routing checks: every sidebar item and in-admin link resolves to a registered admin screen, and the highlighted item follows the URL (no browser, no database)
 - `pnpm --filter @workspace/scripts run test:admin-access` — release check for super-admin login, invitations and their dead-link statuses, the member directory, the rank rules, and multi-workspace membership. Needs `DATABASE_URL`, `SESSION_SECRET`, a running app (`ADMIN_CHECK_BASE_URL`, default `http://localhost:80`) and `chromium` on `PATH` (set `ADMIN_CHECK_SKIP_BROWSER=1` to skip the rendered-page checks); it creates and cleans up its own throwaway workspaces
+- `pnpm --filter @workspace/scripts run test:sendgrid` — check the sender registry and the exact request we put on the wire, against a stub SendGrid on loopback (no network, no credentials)
+- `pnpm --filter @workspace/scripts run sendgrid:check` — report email delivery: whether the domain is authenticated, the DNS records to publish when it isn't, and where each sender stands. `--validate` asks SendGrid to re-check DNS; `--send you@example.com --from support` sends a real test. Needs `SENDGRID_API_KEY`; exits 1 when the account can't send as every sender, so it can gate a go-live.
 - `pnpm --filter @workspace/scripts run calendly:subscribe` — list Calendly webhook subscriptions; `create --url https://<host>/api/webhooks/calendly` sets one up and prints the signing key, `delete <uuid>` removes one. Needs `CALENDLY_PERSONAL_ACCESS_TOKEN`.
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `SESSION_SECRET` — signs session cookies and the single-use booking/reset/invite capability tokens. Auth, intake submission and booking all return 503 without it; there is deliberately no fallback, because a guessable secret would make those tokens forgeable.
 - Optional env (scheduling): `CALENDLY_PERSONAL_ACCESS_TOKEN`, `CALENDLY_WEBHOOK_SIGNING_KEY`. Without them the funnel still captures and scores leads, and the scheduler shows a "we'll email you" message instead of times. Set both in Replit Secrets, never in the repo.
+- Optional env (email): `SENDGRID_API_KEY`. Without it nothing is emailed — invitations still work, and the admin UI hands the inviter a copyable link instead. See **Email (SendGrid)** below for the rest.
 - Escape hatches, rarely needed: `CALENDLY_API_BASE` (point the client at a stub for local testing) and `CALENDLY_CREATE_INVITEE_PATH` (override the Scheduling API path if the account's API disagrees).
 
 ## CI
 
-`.github/workflows/ci.yml` runs install, `typecheck`, `build`, `test:calendly` and the admin routing
-checks on every pull request and on pushes to `main`. It needs no secrets — none of those steps touch Calendly or the
-database — so it is safe on fork pull requests.
+`.github/workflows/ci.yml` runs install, `typecheck`, `build`, `test:calendly`, `test:sendgrid` and the admin
+routing checks on every pull request and on pushes to `main`. It needs no secrets — none of those steps touch Calendly,
+SendGrid or the database (the SendGrid checks run against a stub on loopback) — so it is safe on fork pull requests.
 
 **Use pnpm 10 (pinned to 10.15.1).** Not a preference: pnpm 12 fails this workspace with
 `ERR_PNPM_IGNORED_BUILDS` over esbuild even though `onlyBuiltDependencies` lists it, and pnpm 9
@@ -107,6 +110,93 @@ Two of these hard-fail if done out of order.
    request, so no rebuild is needed.
 6. **Admin → Integrations**: pick the event type and switch it on. Both are required —
    `schedulingLive` needs the token *and* `enabled` *and* `eventTypeUri`.
+
+## Email (SendGrid)
+
+Phoenix sends from **one authenticated domain**, `phoenix-operations.com`, through
+three named senders. Callers pick a sender by key — `noreply`, `support`, `joshua` —
+and never type a From address, which is what keeps every outbound message on an
+address SendGrid will actually sign:
+
+| Key | Address | Display name | Replies go to |
+| --- | --- | --- | --- |
+| `noreply` | noreply@phoenix-operations.com | Phoenix Operations | support@ |
+| `support` | support@phoenix-operations.com | Phoenix Operations Support | itself |
+| `joshua` | joshua@phoenix-operations.com | Joshua Kornitsky | itself |
+
+`lib/integrations/sendgrid` is the only place that talks to SendGrid. It never
+throws and never logs the key; every caller gets a typed result back.
+
+### Secrets to set in Replit
+
+Only the first is required. Add them under **Secrets** in Replit (never in the
+repo), then restart the deployment — every value is read per request, so nothing
+needs a rebuild.
+
+- **`SENDGRID_API_KEY`** — required. Create it in SendGrid under Settings → API
+  Keys with **Mail Send** and **Sender Authentication** access (Full Access also
+  works). Without it, invitations fall back to a copyable link and nothing is emailed.
+- `SENDGRID_MAIL_DOMAIN` — optional, defaults to `phoenix-operations.com`. Changing
+  it moves all three senders at once.
+- `SENDGRID_FROM_NAME` — optional, defaults to `Phoenix Operations`. The display
+  name recipients see.
+- `SENDGRID_SANDBOX=1` — optional. SendGrid runs every validation, including the
+  From identity, and then discards the message. Use it to prove the wiring works
+  without mailing a real person; turn it off to send for real.
+- `SENDGRID_SENDER_NOREPLY` / `_SUPPORT` / `_JOSHUA` — optional per-address
+  overrides, each accepting a bare local part (`hello`) or a whole address.
+  Matching `_NAME` variables override the display names. Rarely needed: the point
+  of the defaults is that authenticating the domain authenticates all three.
+- `SENDGRID_FROM_EMAIL` — the address this integration read before the registry
+  existed. Still honoured as the `noreply` override, so a deployment that already
+  had it keeps sending across this change.
+
+### Authenticating the senders
+
+Authenticate the **domain**, not the addresses. One domain authentication covers
+all three senders — and every address you add later — and it is what lets mail
+carry our own DKIM signature instead of SendGrid's shared one.
+
+1. SendGrid → Settings → **Sender Authentication** → *Authenticate Your Domain*,
+   for `phoenix-operations.com`. Leave automated security on: SendGrid then manages
+   DKIM key rotation through CNAMEs, so the DNS is published once.
+2. Publish the CNAME records it gives you on the domain's nameserver.
+   `sendgrid:check` prints them, with a ✓/✗ per record, and so does
+   Admin → Integrations while the domain is still pending.
+3. `sendgrid:check --validate` asks SendGrid to re-check DNS. It reports *pending*
+   until every record resolves — DNS propagation, not a failure.
+4. `sendgrid:check --send you@example.com --from support` for a real end-to-end
+   test, or the **Send test** button on each sender in Admin → Integrations, which
+   only ever mails the signed-in admin's own address.
+
+Single Sender verification (per address, in SendGrid's UI) is recognised as a
+fallback and reported as such, but it is the weaker option: it authenticates one
+mailbox rather than the domain, and it does not survive adding a fourth address.
+
+### What sends today
+
+- **Workspace invitations** (`POST /members/invite`) go out from `noreply` as a
+  multipart HTML + plain-text message. When delivery fails the API still returns
+  the invitation link and says why, so an admin can hand it over by other means —
+  a failing mail provider must never block someone from being invited.
+- `support` and `joshua` are configured, authenticated and sendable, but nothing
+  sends from them automatically yet. The intake confirmation and the new-lead
+  notification sketched on the Integrations screen are still unbuilt, and so is
+  the sequence automation.
+- **Password reset emails are still not sent.** `POST /auth/reset/request` remains
+  disabled in production and returns the link in the response body in development.
+  Wiring it to `noreply` is now a small change, but it alters an auth flow, so it
+  was left alone deliberately.
+
+### Where to look when mail doesn't arrive
+
+`GET /email/status` (super admin, admin, owner) is the same composed answer the
+Integrations screen and the CLI read, so the three can never disagree: key present,
+domain authentication state with its DNS records, and each sender's authentication.
+It is cached for 60 seconds; `?refresh=1`, or the **Re-check** button, skips the cache.
+A send that fails comes back as one of four reasons — `email_not_configured`,
+`sender_not_authenticated`, `provider_rejected`, `provider_unavailable` — and
+`sender_not_authenticated` is the one that means "finish step 2 above".
 
 ## Roles & permissions
 
