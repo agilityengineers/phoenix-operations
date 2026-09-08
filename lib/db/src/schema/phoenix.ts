@@ -32,6 +32,8 @@ export const phoenixUserInvites = pgTable("phoenix_user_invites", {
   role: text("role").notNull().default("staff"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
+  /** Set when a newer invitation supersedes this one, so the old link reads as revoked rather than merely invalid. */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("phoenix_user_invites_workspace_email_idx").on(table.workspaceId, table.email)]);
 

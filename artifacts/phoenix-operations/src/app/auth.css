@@ -58,6 +58,13 @@
 .auth-form .field input {
   border-color: var(--border-5);
 }
+/* An invitation fixes the address it was issued to — show that it is not editable. */
+.auth-form .field input[readonly],
+.signup-grid .field input[readonly] {
+  background: var(--border-4);
+  color: var(--muted);
+  cursor: default;
+}
 .auth-row {
   display: flex;
   justify-content: space-between;

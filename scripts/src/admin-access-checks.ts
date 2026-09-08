@@ -12,6 +12,7 @@ const workspaceId = `ws_check_${suffix}`;
 const ownerId = `usr_check_owner_${suffix}`;
 const ownerEmail = `owner-${suffix}@checks.invalid`;
 const invitedEmail = `admin-${suffix}@checks.invalid`;
+const supersededEmail = `resent-${suffix}@checks.invalid`;
 const password = `Release-${suffix.slice(0, 12)}!`;
 
 const check: (condition: unknown, message: string) => asserts condition = (condition, message) => {
@@ -94,6 +95,17 @@ async function main() {
   const token = new URL(invitePath, baseUrl).searchParams.get("invite");
   check(token, "Invitation did not return an acceptance token.");
 
+  const live = await json(`/api/auth/invite?token=${encodeURIComponent(token)}`);
+  check(live.response.ok, `Invitation status check failed (${live.response.status}).`);
+  check(live.value.status === "valid", "A live invitation did not report itself usable before signup.");
+  check(live.value.email === invitedEmail, "Invitation status did not name the invited address.");
+  check(live.value.role === "admin" && live.value.workspaceName, "Invitation status did not describe the role and workspace being joined.");
+  check(!("token" in live.value) && !("tokenHash" in live.value) && !("workspaceId" in live.value), "Invitation status echoed the raw token or internal workspace id.");
+
+  const unknown = await json("/api/auth/invite?token=not-a-real-invitation");
+  check(unknown.value.status === "invalid", "An unknown token was not reported as invalid.");
+  check(!unknown.value.email && !unknown.value.workspaceName, "An unknown token leaked workspace or invitee detail.");
+
   const signup = await post("/api/auth/signup", {
     name: "Release Check Admin",
     email: invitedEmail,
@@ -109,6 +121,9 @@ async function main() {
   const acceptedMember = (members.value.members as Array<Record<string, unknown>> | undefined)?.find(member => member.email === invitedEmail);
   check(acceptedMember?.role === "admin" && acceptedMember.state === "active", "Accepted admin was not activated in the workspace member directory.");
   check(acceptedMember.workspaceId === workspaceId, "Accepted admin member record points to the wrong workspace.");
+
+  const spent = await json(`/api/auth/invite?token=${encodeURIComponent(token)}`);
+  check(spent.value.status === "used", "An accepted invitation was not reported as already used.");
 
   const reused = await post("/api/auth/signup", {
     name: "Release Check Admin",
@@ -134,6 +149,10 @@ async function main() {
   const [expiringRecord] = await db.select().from(phoenixUserInvites).where(eq(phoenixUserInvites.email, expiredEmail)).limit(1);
   check(expiringRecord, "Expiring invitation was not persisted.");
   await db.update(phoenixUserInvites).set({ expiresAt: new Date(0) }).where(eq(phoenixUserInvites.id, expiringRecord.id));
+  const lapsed = await json(`/api/auth/invite?token=${encodeURIComponent(expiringToken)}`);
+  check(lapsed.value.status === "expired", "An expired invitation was not reported as expired ahead of the form.");
+  check(!lapsed.value.email && !lapsed.value.workspaceName, "An expired invitation leaked workspace or invitee detail.");
+
   const expired = await post("/api/auth/signup", {
     name: "Expired Invite",
     email: expiredEmail,
@@ -141,6 +160,27 @@ async function main() {
     inviteToken: expiringToken,
   });
   check(expired.response.status === 400 && expired.value.error === "invalid_or_expired_invite", "Expired invitation was not rejected cleanly.");
+
+  const firstInvite = await post("/api/members/invite", { email: supersededEmail, role: "staff" }, ownerCookie);
+  check(firstInvite.response.ok, `Supersession setup failed (${firstInvite.response.status}).`);
+  const staleToken = new URL(String(firstInvite.value.invitePath), baseUrl).searchParams.get("invite");
+  check(staleToken, "Superseded invitation setup did not return an acceptance token.");
+  const secondInvite = await post("/api/members/invite", { email: supersededEmail, role: "admin" }, ownerCookie);
+  check(secondInvite.response.ok, `Re-invitation failed (${secondInvite.response.status}).`);
+  const freshToken = new URL(String(secondInvite.value.invitePath), baseUrl).searchParams.get("invite");
+  check(freshToken && freshToken !== staleToken, "Re-invitation did not issue a distinct token.");
+
+  const stale = await json(`/api/auth/invite?token=${encodeURIComponent(staleToken!)}`);
+  check(stale.value.status === "revoked", "A superseded invitation was not reported as revoked.");
+  const staleSignup = await post("/api/auth/signup", {
+    name: "Superseded Invite",
+    email: supersededEmail,
+    password,
+    inviteToken: staleToken,
+  });
+  check(staleSignup.response.status === 400 && staleSignup.value.error === "invalid_or_expired_invite", "A superseded invitation was still redeemable at signup.");
+  const fresh = await json(`/api/auth/invite?token=${encodeURIComponent(freshToken!)}`);
+  check(fresh.value.status === "valid" && fresh.value.role === "admin", "The replacement invitation did not survive superseding the old one.");
 
   console.info("Admin access release checks passed.");
 }
